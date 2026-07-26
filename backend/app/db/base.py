@@ -3,6 +3,7 @@
 Engine создаётся лениво, при первом обращении. Это важно: импорт моделей
 (в тестах, в Alembic, в линтерах) не должен требовать живой БД и драйвера.
 """
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
@@ -46,6 +48,11 @@ class TimestampMixin:
 @lru_cache
 def get_engine() -> AsyncEngine:
     settings = get_settings()
+    # В тестах используем NullPool: pytest-asyncio создаёт новый event loop
+    # на каждый тест, а asyncpg-соединения из пула привязаны к старому
+    # loop и падают с "Event loop is closed" при попытке использовать.
+    if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("USE_NULL_POOL") == "1":
+        return create_async_engine(settings.database_url, poolclass=NullPool)
     return create_async_engine(
         settings.database_url,
         echo=settings.APP_ENV == "local",

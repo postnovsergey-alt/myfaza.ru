@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # --- Мониторинг ---
     SENTRY_DSN: str = ""
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
         return (
@@ -54,7 +54,7 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def sync_database_url(self) -> str:
         """Для Alembic — он работает синхронно."""
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def webapp_url(self) -> str:
         return f"https://{self.PUBLIC_DOMAIN}/app"

@@ -1,6 +1,9 @@
 """cycles, daily_logs — разделы 6.2 и 6.3 ТЗ."""
+from __future__ import annotations
+
 import uuid
 from datetime import date
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ARRAY,
@@ -19,6 +22,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.crypto import EncryptedString
 from app.db.base import Base, TimestampMixin, UUIDMixin
 from app.db.enums import FlowLevel, Mood, Source, pg_enum
+
+if TYPE_CHECKING:
+    from app.db.models.user import User
 
 
 class Cycle(Base, UUIDMixin, TimestampMixin):
@@ -47,7 +53,7 @@ class Cycle(Base, UUIDMixin, TimestampMixin):
         pg_enum(Source, "source"), default=Source.WEB
     )
 
-    user: Mapped["User"] = relationship(back_populates="cycles")  # noqa: F821
+    user: Mapped[User] = relationship(back_populates="cycles")
 
 
 class DailyLog(Base, UUIDMixin, TimestampMixin):

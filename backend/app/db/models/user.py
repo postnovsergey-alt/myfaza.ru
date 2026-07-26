@@ -1,6 +1,9 @@
 """users, user_settings — разделы 6.1 и 6.4 ТЗ."""
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, time
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -17,6 +20,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
 from app.db.enums import NotifyChannel, Theme, pg_enum
+
+if TYPE_CHECKING:
+    from app.db.models.cycle import Cycle
 
 
 class User(Base, UUIDMixin, TimestampMixin):
@@ -47,10 +53,10 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    settings: Mapped["UserSettings"] = relationship(
+    settings: Mapped[UserSettings] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    cycles: Mapped[list["Cycle"]] = relationship(  # noqa: F821
+    cycles: Mapped[list[Cycle]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
