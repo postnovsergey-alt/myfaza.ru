@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <!-- Иконка бренда «Моя фаза». Абстракция без гендерных символов -
+       обычная фазовая полудуга, соответствует правилу дискретности (DESIGN-SPEC 1.1). -->
+  <rect width="192" height="192" rx="42" fill="#F5F1EA"/>
+  <circle cx="96" cy="96" r="46" fill="none" stroke="#993556" stroke-width="10"/>
+  <path d="M96 50 A46 46 0 0 1 96 142" fill="#993556"/>
+</svg>

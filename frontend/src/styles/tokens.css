@@ -1,0 +1,70 @@
+/* Токены дизайна — по DESIGN-SPEC.md 2.1. Значения в OKLCH. */
+
+:root {
+  --bg:           oklch(95.9% 0.010 82);
+  --surface:      oklch(100%  0     90);
+  --surface-alt:  oklch(93.0% 0.015 81);
+
+  --text:         oklch(29.2% 0.004 107);
+  --text-soft:    oklch(48.2% 0.006 95);
+
+  --accent:       oklch(48.2% 0.136 3);
+  --accent-hi:    oklch(55.0% 0.150 4);
+  --accent-soft:  oklch(85.9% 0.063 357);
+
+  --second:       oklch(62.2% 0.130 67);
+  --second-soft:  oklch(95.3% 0.029 81);
+  --second-dark:  oklch(48.0% 0.104 64);
+
+  --border:       color-mix(in oklch, var(--text) 12%, transparent);
+  --border-strong:color-mix(in oklch, var(--text) 22%, transparent);
+
+  /* Цвет текста на акцентной заливке. В светлой теме — белый
+     (акцент тёмный), в тёмной — тёмный (акцент светлый). */
+  --on-accent:    white;
+
+  --radius-sm: 10px;
+  --radius:    14px;
+  --radius-lg: 20px;
+
+  --dur-instant: 120ms;
+  --dur-fast:    200ms;
+  --dur-base:    320ms;
+  --dur-slow:    900ms;
+
+  --ease-out:  cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in:   cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-soft: linear(0, 0.35 12%, 0.72 26%, 0.92 40%, 1 62%, 1);
+}
+
+:root[data-theme="dark"] {
+  --bg:           oklch(21.1% 0.005 68);
+  --surface:      oklch(25.5% 0.006 56);
+  --surface-alt:  oklch(29.0% 0.007 56);
+
+  --text:         oklch(94.2% 0.012 80);
+  --text-soft:    oklch(71.3% 0.014 71);
+
+  --accent:       oklch(73.7% 0.116 359);
+  --accent-hi:    oklch(79.0% 0.110 359);
+  --accent-soft:  oklch(31.0% 0.069 353);
+
+  --second:       oklch(76.7% 0.125 77);
+  --second-soft:  oklch(30.0% 0.050 70);
+  --second-dark:  oklch(70.0% 0.110 70);
+
+  --border:       color-mix(in oklch, var(--text) 14%, transparent);
+  --border-strong:color-mix(in oklch, var(--text) 26%, transparent);
+
+  /* Тёмная тема: акцент светлый — контраст даёт тёмный фон */
+  --on-accent:    var(--bg);
+}
+
+/* Уважаем системную настройку "меньше движения" (DESIGN-SPEC 3.4) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
