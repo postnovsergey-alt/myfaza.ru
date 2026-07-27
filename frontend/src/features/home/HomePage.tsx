@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api, ApiError, type Cycle, type PredictionOut } from "@/api/client";
@@ -67,14 +67,16 @@ export function HomePage() {
     },
   });
 
-  if (prediction.isLoading) {
-    return <div className="pt-20 text-center text-[color:var(--text-soft)]">{t("action.loading")}</div>;
-  }
+  // Нет циклов → на онбординг. Через useEffect, а не setTimeout в рендере,
+  // чтобы React не жаловался на side-effect и не было гонок.
+  useEffect(() => {
+    if (!prediction.isLoading && !prediction.data) {
+      navigate("/onboarding", { replace: true });
+    }
+  }, [prediction.isLoading, prediction.data, navigate]);
 
-  if (!prediction.data) {
-    // Нет циклов — редиректим на онбординг
-    setTimeout(() => navigate("/onboarding", { replace: true }), 0);
-    return null;
+  if (prediction.isLoading || !prediction.data) {
+    return <div className="pt-20 text-center text-[color:var(--text-soft)]">{t("action.loading")}</div>;
   }
 
   const p = prediction.data;
