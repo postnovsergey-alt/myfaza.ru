@@ -3,11 +3,13 @@ import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { AppShell } from "@/components/AppShell";
+import { AccountPage } from "@/features/account/AccountPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { TelegramGate } from "@/features/auth/TelegramGate";
 import { CalendarPage } from "@/features/calendar/CalendarPage";
 import { HomePage } from "@/features/home/HomePage";
 import { OnboardingPage } from "@/features/onboarding/OnboardingPage";
+import { PrivacyPage } from "@/features/privacy/PrivacyPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { StatsPage } from "@/features/stats/StatsPage";
 import { applyColorScheme, getColorScheme, initPlatform, subscribeThemeChanges } from "@/platform";
@@ -130,6 +132,15 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute>
+                <AppShell><AccountPage /></AppShell>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/privacy" element={<AppShell bare><PrivacyPage /></AppShell>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

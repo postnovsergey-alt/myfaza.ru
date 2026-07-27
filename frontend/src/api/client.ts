@@ -82,7 +82,7 @@ export const api = {
   post: async <T>(path: string, body?: unknown) => parse<T>(await raw("POST", path, body)),
   put:  async <T>(path: string, body?: unknown) => parse<T>(await raw("PUT",  path, body)),
   patch:async <T>(path: string, body?: unknown) => parse<T>(await raw("PATCH",path, body)),
-  del:  async <T>(path: string) => parse<T>(await raw("DELETE", path)),
+  del:  async <T>(path: string, body?: unknown) => parse<T>(await raw("DELETE", path, body)),
 };
 
 // --- Модель ответа /auth/*, повторяет схему бэкенда 8.1 ---

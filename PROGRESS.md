@@ -5,79 +5,86 @@
 
 ## Текущий спринт
 
-**Спринт 5 — уведомления. Статус: готов.**
+**Спринт 6 — личный кабинет + деплой. Статус: готов.**
 
 ## Сделано
 
-### Спринт 1
-- Каркас FastAPI, конфиг на pydantic-settings, ленивый async engine
-- 9 моделей БД из раздела 6 ТЗ + начальная миграция `0001_initial`
-- Шифрование `daily_logs.note` (AES-256-GCM)
-- `/health`, `/health/ready`, docker-compose, Makefile, 12 тестов
+### Спринт 1 — каркас
+FastAPI, 9 моделей БД, миграции, шифрование `daily_logs.note`,
+`/health`, docker-compose, 12 тестов.
 
 ### Спринт 2 — аутентификация
-- argon2id, JWT HS256, ротация refresh с обнаружением кражи
-- Telegram initData (проверка auth_date < 24h)
-- 8 эндпоинтов /auth, 21 тест
+argon2id, JWT + ротация refresh с обнаружением кражи, Telegram initData
+с проверкой `auth_date`, привязка аккаунтов, /auth-эндпоинты, 21 тест.
 
 ### Спринт 3 — ядро
-- Алгоритм прогноза по разделу 7 ТЗ, 22 юнит-теста
-- 10 эндпоинтов (/cycles, /predictions, /logs), 22 HTTP-теста
+Алгоритм прогноза по разделу 7 (22 юнит-теста), CRUD /cycles с
+валидацией FR-1.5, /predictions/next и /calendar, /logs с шифрованным
+`note`. 22 HTTP-теста.
 
 ### Спринт 4 — фронтенд
-- Vite + React 18 + TS + Tailwind + PWA-плагин
-- 5 экранов + логирование + онбординг, i18n со своим мини-парсером плюралов
-- OpenAPI-клиент, платформенный слой TG↔web, тёплая песочная палитра
-- Бандл 76 KB gzip, Lighthouse Accessibility 100
+Vite + React 18 + TS + Tailwind + PWA. 5 экранов + логирование +
+онбординг. Свой мини-парсер ICU-плюралов, OpenAPI-клиент, платформенный
+слой TG↔web. Бандл 76 KB gzip, Lighthouse A11y 100.
 
 ### Спринт 5 — уведомления
-- `services/notifications.py`: `plan_notifications` материализует
-  строки на текущее часовое окно с учётом таймзоны пользователя.
-  Дедупликация через `INSERT ON CONFLICT DO NOTHING` по UNIQUE
-  `(user_id, type, target_date, channel)` — двойной запуск не создаёт
-  дублей (FR-4.8)
-- `services/notification_sender.py`: отправка в Telegram (aiogram) и
-  Web Push (pywebpush) с обработкой ошибок:
-  - Telegram 403 (bot blocked) → переключение канала на web/none
-  - Telegram 429 → уважение retry_after
-  - Push 404/410 → деактивация подписки
-  - Push failure_count ≥ 5 → деактивация
-- `bot/texts.py`: тексты для дискретного и обычного режима
-  (без слов «менструация», «цикл» в дискретных заголовках)
-- Эндпоинты (FR-8.5, ТЗ 8.6):
-  - `GET/PATCH /settings` — управление всеми параметрами уведомлений
-  - `POST /push/subscribe`, `POST /push/unsubscribe`
-  - `GET /push/vapid-key` — публичный ключ для клиентской подписки
-  - `POST /push/test` — тестовый пуш, rate limit 1/мин через Redis
-- Фронтенд:
-  - `sw.ts` — service worker: `push` показывает уведомление,
-    `notificationclick` открывает нужный экран или фокусирует таб
-  - `pushClient.ts` — subscribe/unsubscribe с корректной подпиской
-    через `applicationServerKey` (base64url → Uint8Array)
-  - `IosInstallHint` — детекция Safari-iOS-non-standalone,
-    инструкция по установке PWA (ТЗ 9.3, обязательное требование)
-  - Настройки уведомлений в `SettingsPage`: за сколько дней (1/2/3/5/7),
-    канал (telegram/web/both/none), дискретный режим, тестовый пуш
-- Тесты (обязательные из ТЗ 9.5):
-  - Пользователь в `Asia/Vladivostok` получает пуш в 10:00 по своему
-    времени, но не в 10:00 MSK
-  - Двойной запуск планировщика — 0 дубликатов
-  - `channel=none` не получает ничего
-  - `IntegrityError` при попытке вставить дубль вручную
-  - `freezegun` мокает время в планировщике
+Планировщик с UNIQUE-дедупликацией, Telegram+Web Push отправка с
+обработкой ошибок, service worker с injectManifest, iOS-инструкция,
+эндпоинты /settings и /push/*. 8 обязательных тестов.
 
-**Итого 89 тестов зелёные**, ruff + mypy чисты, /health/ready → ok.
+### Спринт 6 — личный кабинет + деплой
+- **Backend, личный кабинет (FR-8, ТЗ 8.5):**
+  - `GET /me` — сводка (auth_methods, consent, cycle_status)
+  - `PATCH /me` — display_name, timezone, locale
+  - `POST /me/email` — привязка/смена email
+  - `POST /me/password` — с проверкой current_password
+  - `DELETE /me/telegram`, `DELETE /me/email` — с запретом отвязки последнего способа входа
+  - `GET/DELETE /me/sessions[/{id}]` — список и завершение
+  - `GET /push/subscriptions` — активные подписки
+  - `GET /me/history/cycles`, `/me/history/logs` — пагинация 1..100, фильтр по симптому
+  - `GET /me/consent` — принятый текст
+  - `GET /export?format=csv|json` — весь дата-дамп в CSV или JSON
+  - `POST /account/consent/revoke`, `DELETE /account` — hard delete
+  - `GET /stats` — FR-6: среднее, σ, регулярность, мягкое предупреждение
+- **Backend, тесты:** 16 HTTP-тестов личного кабинета, включая проверку
+  hard delete прямыми запросами к БД. **Всего 105 зелёных.**
+- **Deploy (ТЗ 12.3, 12.4):**
+  - `deploy/docker-compose.prod.yml` — api/bot/worker/postgres/redis/frontend/nginx
+  - `deploy/nginx/prod.conf` — TLS, HSTS, CSP, gzip, X-Forwarded-*
+  - `frontend/Dockerfile` — multi-stage: build → nginx с SPA-fallback
+  - `backend/app/workers/entrypoint.py` — APScheduler 5 мин, план+отправка
+- **CI/CD:**
+  - `.github/workflows/ci.yml` — на PR: postgres+redis сервисы,
+    alembic upgrade, ruff, mypy, pytest, tsc, build фронта,
+    проверка бандла < 256 KB
+  - `.github/workflows/release.yml` — на тег `v*`: build+push ghcr,
+    ssh-деплой, migrate, smoke, rollback при провале
+- **Документы:**
+  - `docs/privacy-policy.md`, `docs/consent.md` — черновики,
+    красная зона: юрист согласовывает
+- **Frontend:**
+  - `AccountPage` — профиль, способы входа, сессии, приватность,
+    экспорт, удаление, отзыв согласия. Ссылка из `SettingsPage`.
+  - `PrivacyPage` — публичная политика конфиденциальности `/privacy`
+- **Чек-лист приёмки MVP:** `docs/acceptance-checklist.md` —
+  11 из 13 пунктов готовы полностью, 2 требуют прод-деплоя (красная
+  зона).
 
-Метрики фронта (актуальные после SW и push-клиента):
-- Bundle JS: 244.73 KB min / **77.65 KB gzip** (бюджет NFR-3: < 250 KB gzip)
-- SW: 16.47 KB min / 5.60 KB gzip
-- Bundle CSS: 15.67 KB / 4.16 KB gzip
+### Метрики фронта
+- Bundle JS: 253 KB min / **79.85 KB gzip** (бюджет NFR-3: 250 KB gzip ✓)
+- Service Worker: 5.60 KB gzip
+- CSS: 4.17 KB gzip
 
 ## Следующий шаг
 
-Спринт 6 — личный кабинет + деплой. Разделы FR-8, 8.5, 12 ТЗ. Профиль,
-способы входа, сессии, история записей, приватность. docker-compose.prod,
-Nginx, CI/CD, чек-лист приёмки (раздел 14).
+MVP готов технически. Дальнейшие действия — красная зона, требуют
+человека:
+1. Юрист согласует `docs/consent.md` и `docs/privacy-policy.md`.
+2. VPS + GitHub-секреты + первый тег `v0.1.0` → прод-деплой.
+3. Ручной прогон нового пользователя на реальном телефоне.
+
+После этих трёх шагов — все 13 пунктов чек-листа закрыты, и можно
+объявлять релиз v0.1.
 
 ## Где остановились
 

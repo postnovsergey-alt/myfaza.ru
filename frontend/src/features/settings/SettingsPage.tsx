@@ -82,9 +82,17 @@ export function SettingsPage() {
       <h1>{t("settings.title")}</h1>
 
       {user && (
-        <div className="rounded-[var(--radius)] bg-[color:var(--surface)] p-4 text-[13px] text-[color:var(--text-soft)]">
-          {user.email ?? user.telegram_username ?? user.id}
-        </div>
+        <button
+          onClick={() => navigate("/account")}
+          className="rounded-[var(--radius)] bg-[color:var(--surface)] p-4 text-left"
+        >
+          <div className="text-[14px] text-[color:var(--text)]">
+            {user.display_name ?? user.email ?? user.telegram_username ?? "Профиль"}
+          </div>
+          <div className="text-[12px] text-[color:var(--text-soft)]">
+            {t("account.title")} →
+          </div>
+        </button>
       )}
 
       <Section title={t("settings.theme")}>
