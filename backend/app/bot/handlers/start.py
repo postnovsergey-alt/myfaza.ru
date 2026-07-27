@@ -52,6 +52,18 @@ async def start_plain(message: Message, db: AsyncSession) -> None:
     await _handle_plain_start(message, db)
 
 
+async def _safe_answer(message: Message, text: str, **kwargs) -> None:
+    """Ответ пользователю не должен рушить транзакцию.
+
+    Если Telegram отвечает 4xx (chat not found, blocked и т.п.) — сохранение
+    user/цикла всё равно должно закоммититься. Лог + swallow.
+    """
+    try:
+        await message.answer(text, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("bot answer failed for chat %s: %s", message.chat.id, exc)
+
+
 async def _handle_plain_start(message: Message, db: AsyncSession) -> None:
     settings = get_settings()
     tg = message.from_user
@@ -65,28 +77,28 @@ async def _handle_plain_start(message: Message, db: AsyncSession) -> None:
             log.warning("authenticate_telegram failed on /start: %s", exc)
 
     text = WELCOME.format(privacy_url=f"https://{settings.PUBLIC_DOMAIN}/privacy")
-    await message.answer(text, reply_markup=keyboards.open_app_button())
+    await _safe_answer(message, text, reply_markup=keyboards.open_app_button())
 
 
 async def _handle_link(message: Message, token: str, db: AsyncSession) -> None:
     tg = message.from_user
     if tg is None:
-        await message.answer(LINK_FAILED)
+        await _safe_answer(message, LINK_FAILED)
         return
     try:
         await auth_service.confirm_link_telegram(
             db, token=token, telegram_id=tg.id, username=tg.username
         )
     except auth_service.LinkTokenInvalidError:
-        await message.answer(LINK_EXPIRED)
+        await _safe_answer(message, LINK_EXPIRED)
         return
     except auth_service.EmailAlreadyUsedError:
         # confirm_link_telegram переиспользует код TELEGRAM_ALREADY_USED
-        await message.answer(LINK_ALREADY_TAKEN)
+        await _safe_answer(message, LINK_ALREADY_TAKEN)
         return
     except auth_service.AuthError as exc:
         log.warning("confirm_link_telegram failed: %s", exc)
-        await message.answer(LINK_FAILED)
+        await _safe_answer(message, LINK_FAILED)
         return
 
-    await message.answer(LINK_OK, reply_markup=keyboards.open_app_button())
+    await _safe_answer(message, LINK_OK, reply_markup=keyboards.open_app_button())
