@@ -27,9 +27,10 @@ export function TelegramGate() {
           init_data: initData,
         });
         setSession(r);
-        navigate(r.user.onboarding_completed ? "/" : "/onboarding", {
-          replace: true,
-        });
+        // Всегда на главную. Если consent ещё не дан — ProtectedRoute
+        // покажет ConsentGate; если циклов нет — HomePage покажет
+        // пустое состояние с CTA.
+        navigate("/", { replace: true });
       } catch {
         setErr(t("error.generic"));
       }

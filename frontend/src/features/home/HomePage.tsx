@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api, ApiError, type Cycle, type PredictionOut } from "@/api/client";
@@ -67,16 +67,68 @@ export function HomePage() {
     },
   });
 
-  // Нет циклов → на онбординг. Через useEffect, а не setTimeout в рендере,
-  // чтобы React не жаловался на side-effect и не было гонок.
-  useEffect(() => {
-    if (!prediction.isLoading && !prediction.data) {
-      navigate("/onboarding", { replace: true });
-    }
-  }, [prediction.isLoading, prediction.data, navigate]);
-
-  if (prediction.isLoading || !prediction.data) {
+  if (prediction.isLoading) {
     return <div className="pt-20 text-center text-[color:var(--text-soft)]">{t("action.loading")}</div>;
+  }
+
+  // Пустое состояние — циклов ещё нет. Даём CTA «Отметить начало»
+  // и не блокируем навигацию: пользователь может уйти в календарь,
+  // настройки, аккаунт — оттуда всё доступно с дефолтами.
+  if (!prediction.data) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-stretch gap-6">
+        <div className="pt-8 text-center">
+          <h1 className="text-[22px] font-medium">{t("home.empty.title")}</h1>
+          <p className="mt-2 text-[color:var(--text-soft)]">
+            {t("home.empty.body")}
+          </p>
+        </div>
+
+        <div className="mt-auto flex flex-col gap-3">
+          <Button size="lg" fullWidth onClick={() => setMarkOpen(true)}>
+            {t("home.mark")}
+          </Button>
+        </div>
+
+        <Sheet
+          open={markOpen}
+          onClose={() => setMarkOpen(false)}
+          title={t("home.mark")}
+        >
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              fullWidth
+              onClick={() => mark.mutate(todayISO(0))}
+              disabled={mark.isPending}
+            >
+              {t("home.today")} · {fmtDate(TODAY())}
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              fullWidth
+              onClick={() => mark.mutate(todayISO(-1))}
+              disabled={mark.isPending}
+            >
+              {t("home.yesterday")} · {fmtDate(todayISO(-1))}
+            </Button>
+            <Button
+              variant="ghost"
+              size="lg"
+              fullWidth
+              onClick={() => {
+                setMarkOpen(false);
+                navigate("/calendar");
+              }}
+            >
+              {t("home.pick.date")}
+            </Button>
+          </div>
+        </Sheet>
+      </div>
+    );
   }
 
   const p = prediction.data;

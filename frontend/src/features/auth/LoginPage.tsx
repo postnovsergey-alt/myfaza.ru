@@ -13,13 +13,19 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const navigate = useNavigate();
   const setSession = useAuth((s) => s.setSession);
+  const setUser = useAuth((s) => s.setUser);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === "register" && !consent) {
+      setErr(t("auth.error.consent"));
+      return;
+    }
     setErr(null);
     setBusy(true);
     try {
@@ -28,8 +34,25 @@ export function LoginPage() {
       if (mode === "register") body.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const r = await api.post<TokenResponse>(path, body);
       setSession(r);
-      if (!r.user.onboarding_completed) navigate("/onboarding", { replace: true });
-      else navigate("/", { replace: true });
+      // При регистрации сразу фиксируем согласие: user проставил чекбокс,
+      // это часть регистрационного контракта. По 152-ФЗ согласие ДО обработки.
+      if (mode === "register") {
+        try {
+          await api.post("/auth/consent", { version: "1.0" });
+          const s = useAuth.getState();
+          if (s.user) {
+            setUser({
+              ...s.user,
+              consent_given_at: new Date().toISOString(),
+              consent_version: "1.0",
+            });
+          }
+        } catch {
+          // Согласие не критично для UX — ConsentGate поймает при
+          // следующем действии, если запрос сорвался.
+        }
+      }
+      navigate("/", { replace: true });
     } catch (e) {
       const err = e as { code?: string };
       if (err.code === "INVALID_CREDENTIALS") setErr(t("auth.error.credentials"));
@@ -92,6 +115,19 @@ export function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </Field>
+
+        {mode === "register" && (
+          <label className="flex items-start gap-3 rounded-[var(--radius)] bg-[color:var(--surface-alt)] p-3">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-1 h-5 w-5 accent-[color:var(--accent)]"
+            />
+            <span className="text-[13px]">{t("consent.confirm")}</span>
+          </label>
+        )}
+
         <Button type="submit" size="lg" fullWidth disabled={busy}>
           {t(mode === "login" ? "auth.login" : "auth.register")}
         </Button>

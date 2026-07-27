@@ -4,11 +4,11 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 
 import { AppShell } from "@/components/AppShell";
 import { AccountPage } from "@/features/account/AccountPage";
+import { ConsentGate } from "@/features/auth/ConsentGate";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { TelegramGate } from "@/features/auth/TelegramGate";
 import { CalendarPage } from "@/features/calendar/CalendarPage";
 import { HomePage } from "@/features/home/HomePage";
-import { OnboardingPage } from "@/features/onboarding/OnboardingPage";
 import { PrivacyPage } from "@/features/privacy/PrivacyPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { StatsPage } from "@/features/stats/StatsPage";
@@ -33,11 +33,12 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
   if (!accessToken || !user) {
     return <Navigate to="/entry" replace state={{ from: location }} />;
   }
-  // Онбординг форсим ТОЛЬКО у только-что зарегистрировавшихся,
-  // у кого точно нет ни одного цикла. Если пользователь возвращается
-  // с уже накопленными данными (флаг onboarding_completed мог быть не
-  // проставлен из-за исторических багов), HomePage сам разберётся:
-  // при пустом состоянии редиректит на /onboarding.
+  // Если согласие ещё не дано (обычно TG-user из /start MiniApp) —
+  // блокируем доступ к любой странице кроме consent-экрана.
+  // Веб-регистрация проставляет согласие в LoginPage.
+  if (!user.consent_given_at) {
+    return <AppShell bare><ConsentGate /></AppShell>;
+  }
   return children;
 }
 
@@ -92,14 +93,6 @@ export default function App() {
         <Routes>
           <Route path="/entry" element={<AppShell bare><TelegramGate /></AppShell>} />
           <Route path="/login" element={<AppShell bare><LoginPage /></AppShell>} />
-          <Route
-            path="/onboarding"
-            element={
-              <ProtectedRoute>
-                <AppShell bare><OnboardingPage /></AppShell>
-              </ProtectedRoute>
-            }
-          />
           <Route
             path="/"
             element={
