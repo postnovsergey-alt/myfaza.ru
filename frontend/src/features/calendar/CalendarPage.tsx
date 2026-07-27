@@ -1,16 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { api, type CalendarOut } from "@/api/client";
+import { api, ApiError, type CalendarOut, type Cycle } from "@/api/client";
 import { Button } from "@/components/ui/Button";
+import { Sheet } from "@/components/ui/Sheet";
 import { t } from "@/i18n";
 
 import { LogSheet } from "@/features/logs/LogSheet";
 
 function monthLabel(y: number, m: number): string {
-  // «июль 2026 г.» — Intl добавляет «г.», не всегда нужно; убираем его
-  // и делаем первую букву заглавной вручную (Tailwind capitalize капит
-  // ализирует каждое слово, «Июль 2026 Г.» — некрасиво).
   const raw = new Intl.DateTimeFormat("ru", { month: "long", year: "numeric" })
     .format(new Date(y, m - 1, 1))
     .replace(/\s*г\.$/, "");
@@ -22,13 +21,38 @@ function shift(y: number, m: number, delta: number): { y: number; m: number } {
   return { y: t.getFullYear(), m: t.getMonth() + 1 };
 }
 
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function fmtDate(iso: string): string {
+  return new Intl.DateTimeFormat("ru", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(iso + "T00:00:00Z"));
+}
+
 const RU_WEEKDAYS = ["П", "В", "С", "Ч", "П", "С", "В"];
+
+type Intent = "mark-start" | "mark-end" | null;
 
 export function CalendarPage() {
   const now = new Date();
   const [y, setY] = useState(now.getFullYear());
   const [m, setM] = useState(now.getMonth() + 1);
   const [selected, setSelected] = useState<string | null>(null);
+
+  const [params, setParams] = useSearchParams();
+  const rawIntent = params.get("intent");
+  const intent: Intent =
+    rawIntent === "mark-start" || rawIntent === "mark-end" ? rawIntent : null;
+
+  const [pendingDate, setPendingDate] = useState<string | null>(null);
+  const [intentError, setIntentError] = useState<string | null>(null);
+
+  const qc = useQueryClient();
+  const navigate = useNavigate();
 
   const monthKey = `${y}-${String(m).padStart(2, "0")}`;
   const data = useQuery({
@@ -38,14 +62,116 @@ export function CalendarPage() {
     staleTime: 30_000,
   });
 
+  const clearIntent = () => {
+    setPendingDate(null);
+    setIntentError(null);
+    setParams({}, { replace: true });
+  };
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ["prediction"] });
+    qc.invalidateQueries({ queryKey: ["calendar"] });
+    qc.invalidateQueries({ queryKey: ["cycle-for-date"] });
+  };
+
+  const markStart = useMutation({
+    mutationFn: async (date: string) => {
+      await api.post<Cycle>("/cycles", { start_date: date, source: "web" });
+    },
+    onSuccess: () => {
+      invalidateAll();
+      clearIntent();
+      navigate("/", { replace: true });
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === "CYCLE_OVERLAP") {
+        setIntentError(t("calendar.intent.error.overlap"));
+      } else {
+        setIntentError(t("calendar.intent.error.generic"));
+      }
+    },
+  });
+
+  const markEnd = useMutation({
+    mutationFn: async (date: string) => {
+      await api.post<Cycle>("/cycles/current/end", { end_date: date });
+    },
+    onSuccess: () => {
+      invalidateAll();
+      clearIntent();
+      navigate("/", { replace: true });
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === "NO_OPEN_CYCLE") {
+        setIntentError(t("calendar.intent.error.no_open"));
+      } else {
+        setIntentError(t("calendar.intent.error.generic"));
+      }
+    },
+  });
+
+  const onDayClick = (dateIso: string) => {
+    // Обычный режим — открываем sheet с симптомами/удалением
+    if (!intent) {
+      setSelected(dateIso);
+      return;
+    }
+    // Intent-режим: проверяем дату и открываем confirm
+    if (dateIso > todayISO()) {
+      setIntentError(t("calendar.intent.future"));
+      return;
+    }
+    setIntentError(null);
+    setPendingDate(dateIso);
+  };
+
+  const confirmIntent = () => {
+    if (!pendingDate || !intent) return;
+    if (intent === "mark-start") markStart.mutate(pendingDate);
+    else markEnd.mutate(pendingDate);
+  };
+
   // Первый день месяца — понедельник = 1
   const first = new Date(y, m - 1, 1);
-  const firstDow = (first.getDay() + 6) % 7; // 0=Пн … 6=Вс
+  const firstDow = (first.getDay() + 6) % 7;
 
   const days = data.data?.days ?? [];
+  const isBusy = markStart.isPending || markEnd.isPending;
 
   return (
     <div className="flex flex-col gap-4">
+      {intent && (
+        <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-2 border-b border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3">
+          <div className="text-[15px] font-medium">
+            {t(
+              intent === "mark-start"
+                ? "calendar.intent.start.title"
+                : "calendar.intent.end.title",
+            )}
+          </div>
+          <div className="text-[13px] text-[color:var(--text-soft)]">
+            {t(
+              intent === "mark-start"
+                ? "calendar.intent.start.body"
+                : "calendar.intent.end.body",
+            )}
+          </div>
+          {intentError && (
+            <div
+              role="alert"
+              className="rounded-[var(--radius-sm)] bg-[color:var(--error-bg,#f8d7d5)] p-2 text-[13px] text-[color:var(--error,#8a1c1c)]"
+            >
+              {intentError}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <Button variant="ghost" size="md" onClick={clearIntent}>
+              {t("calendar.intent.cancel")}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
@@ -91,7 +217,7 @@ export function CalendarPage() {
             hasLog={d.has_log}
             isToday={d.is_today}
             cycleDay={d.cycle_day}
-            onOpen={() => setSelected(d.date)}
+            onOpen={() => onDayClick(d.date)}
           />
         ))}
       </div>
@@ -102,11 +228,41 @@ export function CalendarPage() {
         {t("calendar.disclaimer")}
       </p>
 
+      {/* Обычный режим — LogSheet за день */}
       <LogSheet
-        open={selected !== null}
+        open={!intent && selected !== null}
         date={selected}
         onClose={() => setSelected(null)}
       />
+
+      {/* Intent-режим — confirm-Sheet */}
+      <Sheet
+        open={!!pendingDate}
+        onClose={() => setPendingDate(null)}
+        title={t(
+          intent === "mark-end"
+            ? "calendar.intent.confirm.end.title"
+            : "calendar.intent.confirm.start.title",
+        )}
+      >
+        {pendingDate && (
+          <div className="mb-3 text-[14px]">{fmtDate(pendingDate)}</div>
+        )}
+        <div className="flex flex-col gap-2">
+          <Button size="lg" fullWidth onClick={confirmIntent} disabled={isBusy}>
+            {isBusy ? t("action.saving") : t("calendar.intent.confirm.yes")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="lg"
+            fullWidth
+            onClick={() => setPendingDate(null)}
+            disabled={isBusy}
+          >
+            {t("calendar.intent.confirm.no")}
+          </Button>
+        </div>
+      </Sheet>
     </div>
   );
 }
@@ -122,7 +278,6 @@ function DayCell(props: {
   const { date, state, hasLog, isToday, onOpen } = props;
   const day = Number(date.slice(8, 10));
 
-  // Стили ячейки — по разделу 2.1 DESIGN-SPEC.
   let cls = "text-[color:var(--text)] bg-transparent";
   let borderCls = "";
   if (state === "period_actual") {
@@ -132,7 +287,6 @@ function DayCell(props: {
     borderCls =
       "border-[1.5px] border-dashed border-[color:var(--accent)]";
   } else if (state === "fertile") {
-    // 20% заливка = softer background
     cls = "bg-[color:var(--second-soft)] text-[color:var(--text)]";
   }
 

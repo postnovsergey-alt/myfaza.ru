@@ -120,7 +120,7 @@ export function HomePage() {
               fullWidth
               onClick={() => {
                 setMarkOpen(false);
-                navigate("/calendar");
+                navigate("/calendar?intent=mark-start");
               }}
             >
               {t("home.pick.date")}
@@ -208,7 +208,7 @@ export function HomePage() {
             fullWidth
             onClick={() => {
               setMarkOpen(false);
-              navigate("/calendar");
+              navigate("/calendar?intent=mark-start");
             }}
           >
             {t("home.pick.date")}
@@ -246,7 +246,7 @@ export function HomePage() {
             fullWidth
             onClick={() => {
               setEndOpen(false);
-              navigate("/calendar");
+              navigate("/calendar?intent=mark-end");
             }}
           >
             {t("home.pick.date")}
