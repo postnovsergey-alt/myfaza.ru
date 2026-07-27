@@ -9,7 +9,14 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // injectManifest — используем свой SW-файл (нужен для push-хендлера).
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,svg,woff2}"],
+      },
       manifest: {
         name: "Моя фаза",
         short_name: "Моя фаза",
@@ -25,10 +32,6 @@ export default defineConfig({
             type: "image/svg+xml",
           },
         ],
-      },
-      workbox: {
-        // service worker будет наполнен в спринте 5 (Web Push)
-        globPatterns: ["**/*.{js,css,html,svg,woff2}"],
       },
     }),
   ],

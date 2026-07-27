@@ -106,6 +106,16 @@
   "settings.logout": "Выйти",
   "settings.timezone": "Часовой пояс",
 
+  "push.enable": "Включить пуши",
+  "push.disable": "Отключить пуши",
+  "push.enabled": "Пуши включены",
+  "push.denied": "Разрешение на уведомления отклонено. Включите в настройках браузера.",
+  "push.unsupported": "Этот браузер не поддерживает пуши. Пользуйтесь Telegram.",
+  "push.ios.title": "Чтобы пуши работали на iPhone",
+  "push.ios.step1": "Нажмите «Поделиться» в Safari внизу экрана",
+  "push.ios.step2": "Выберите «На экран Домой»",
+  "push.ios.step3": "Откройте иконку с экрана и вернитесь сюда включить пуши",
+
   "action.saving": "Сохраняем…",
   "action.saved": "Сохранено",
   "action.loading": "Загружаем…",
