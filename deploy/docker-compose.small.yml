@@ -1,0 +1,47 @@
+name: myfaza
+
+# Компромиссный compose для маленького VPS, на котором рядом уже живут
+# другие проекты (zabiru, musorstop). См. DECISIONS.md — «MVP-деплой
+# в Amsterdam» и «postgres/redis на хосте».
+#
+# Отличия от deploy/docker-compose.prod.yml:
+# — используется хостовой postgres и redis (не свои контейнеры);
+# — используется хостовой nginx (свой контейнер не поднимаем);
+# — фронтенд собирается статикой и лежит в /var/www/myfaza/dist,
+#   отдаётся хостовым nginx (в этом compose его нет);
+# — api и worker в network_mode: host, чтобы ходить на 127.0.0.1
+#   к postgres и redis без пробрасывания сети.
+#
+# api слушает 127.0.0.1:8010. Наружу проксирует хостовой nginx.
+
+services:
+  api:
+    build: ../backend
+    image: myfaza-api:local
+    restart: unless-stopped
+    env_file: /etc/myfaza/.env
+    network_mode: host
+    command: >
+      uvicorn app.main:app
+      --host 127.0.0.1 --port 8010
+      --proxy-headers
+      --workers 1
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/api/v1/health')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    image: myfaza-api:local
+    restart: unless-stopped
+    env_file: /etc/myfaza/.env
+    network_mode: host
+    depends_on:
+      - api
+    command: python -m app.workers.entrypoint
