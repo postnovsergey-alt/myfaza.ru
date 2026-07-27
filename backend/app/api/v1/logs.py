@@ -34,15 +34,21 @@ async def put_log(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> DailyLogOut:
-    log = await logs_service.upsert_log(
-        db,
-        user.id,
-        on,
-        flow=body.flow,
-        mood=body.mood,
-        symptoms=body.symptoms,
-        note=body.note,
-    )
+    try:
+        log = await logs_service.upsert_log(
+            db,
+            user.id,
+            on,
+            flow=body.flow,
+            mood=body.mood,
+            symptoms=body.symptoms,
+            note=body.note,
+        )
+    except logs_service.LogValidationError as exc:
+        raise HTTPException(
+            status_code=exc.http_status,
+            detail={"error": {"code": exc.code, "message": exc.message}},
+        ) from exc
     return DailyLogOut.model_validate(log)
 
 

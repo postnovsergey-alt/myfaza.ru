@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -10,6 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.enums import FlowLevel, Mood
 from app.db.models import DailyLog
+
+
+class LogValidationError(Exception):
+    code: str = "LOG_INVALID"
+    http_status: int = 400
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.message = message
+        if code:
+            self.code = code
+
+
+def _today() -> date:
+    return datetime.now(tz=UTC).date()
 
 
 async def list_logs(
@@ -38,6 +53,8 @@ async def upsert_log(
     symptoms: list[str] | None,
     note: str | None,
 ) -> DailyLog:
+    if on > _today():
+        raise LogValidationError("Дата в будущем", code="LOG_FUTURE")
     log = await db.scalar(
         select(DailyLog).where(DailyLog.user_id == user_id, DailyLog.date == on)
     )

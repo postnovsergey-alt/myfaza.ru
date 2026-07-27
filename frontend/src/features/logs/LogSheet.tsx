@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { api, ApiError, type DailyLogRow } from "@/api/client";
+import { api, ApiError, type Cycle, type DailyLogRow } from "@/api/client";
 import { Button } from "@/components/ui/Button";
 import { Sheet } from "@/components/ui/Sheet";
 import { t } from "@/i18n";
@@ -21,8 +21,19 @@ const SYMPTOMS = [
 type Flow = (typeof FLOWS)[number];
 type Mood = (typeof MOODS)[number];
 
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function shiftISO(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function LogSheet({ open, date, onClose }: Props) {
   const qc = useQueryClient();
+  const isFuture = !!date && date > todayISO();
 
   const existing = useQuery({
     queryKey: ["log", date],
@@ -30,8 +41,6 @@ export function LogSheet({ open, date, onClose }: Props) {
     queryFn: async () => {
       if (!date) return null;
       try {
-        // Нет отдельного /logs/{date} GET, но есть list с range —
-        // берём диапазон одного дня.
         const list = await api.get<DailyLogRow[]>(
           `/logs?from=${date}&to=${date}`,
         );
@@ -43,10 +52,34 @@ export function LogSheet({ open, date, onClose }: Props) {
     },
   });
 
+  // Ищем цикл, в диапазон которого попадает выбранная дата.
+  // Окно назад ~45 дней — достаточно, чтобы поймать открытый цикл или
+  // недавно закрытый; вперёд смотрим на 1 день, чтобы включить start-day.
+  const cycleForDate = useQuery({
+    queryKey: ["cycle-for-date", date],
+    enabled: open && !!date && !isFuture,
+    queryFn: async () => {
+      if (!date) return null;
+      const from = shiftISO(date, -45);
+      const to = date;
+      const list = await api.get<Cycle[]>(`/cycles?from=${from}&to=${to}`);
+      // list — циклы, у которых start_date попал в [from..to]. Проверяем
+      // покрытие: start_date <= date && (end_date IS NULL || end_date >= date).
+      return (
+        list.find(
+          (c) =>
+            c.start_date <= date &&
+            (c.end_date === null || c.end_date >= date),
+        ) ?? null
+      );
+    },
+  });
+
   const [flow, setFlow] = useState<Flow | null>(null);
   const [mood, setMood] = useState<Mood | null>(null);
   const [symptoms, setSymptoms] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -55,7 +88,15 @@ export function LogSheet({ open, date, onClose }: Props) {
     setMood((row?.mood as Mood | null) ?? null);
     setSymptoms(new Set(row?.symptoms ?? []));
     setNote(row?.note ?? "");
+    setError(null);
   }, [open, existing.data]);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["calendar"] });
+    qc.invalidateQueries({ queryKey: ["log"] });
+    qc.invalidateQueries({ queryKey: ["cycle-for-date"] });
+    qc.invalidateQueries({ queryKey: ["prediction"] });
+  };
 
   const save = useMutation({
     mutationFn: async () => {
@@ -68,10 +109,35 @@ export function LogSheet({ open, date, onClose }: Props) {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["calendar"] });
-      qc.invalidateQueries({ queryKey: ["log"] });
+      invalidate();
       onClose();
     },
+    onError: () => setError(t("log.delete.error")),
+  });
+
+  const deleteEntry = useMutation({
+    mutationFn: async () => {
+      if (!date) return;
+      await api.del(`/logs/${date}`);
+    },
+    onSuccess: () => {
+      invalidate();
+      onClose();
+    },
+    onError: () => setError(t("log.delete.error")),
+  });
+
+  const deleteCycle = useMutation({
+    mutationFn: async () => {
+      const cyc = cycleForDate.data;
+      if (!cyc) return;
+      await api.del(`/cycles/${cyc.id}`);
+    },
+    onSuccess: () => {
+      invalidate();
+      onClose();
+    },
+    onError: () => setError(t("log.delete.error")),
   });
 
   const toggle = (s: string) =>
@@ -80,6 +146,9 @@ export function LogSheet({ open, date, onClose }: Props) {
       next.has(s) ? next.delete(s) : next.add(s);
       return next;
     });
+
+  const canDeleteEntry = !!existing.data;
+  const canDeleteCycle = !!cycleForDate.data;
 
   return (
     <Sheet open={open} onClose={onClose} title={t("log.title")}>
@@ -93,12 +162,22 @@ export function LogSheet({ open, date, onClose }: Props) {
         </div>
       )}
 
+      {isFuture && (
+        <div
+          role="alert"
+          className="mb-3 rounded-[var(--radius)] bg-[color:var(--surface-alt)] p-3 text-[13px] text-[color:var(--text-soft)]"
+        >
+          {t("log.future.banner")}
+        </div>
+      )}
+
       <SectionTitle>{t("log.flow")}</SectionTitle>
       <Grid>
         {FLOWS.map((f) => (
           <ChoicePill
             key={f}
             active={flow === f}
+            disabled={isFuture}
             onClick={() => setFlow(flow === f ? null : f)}
           >
             {t(`log.flow.${f}`)}
@@ -112,6 +191,7 @@ export function LogSheet({ open, date, onClose }: Props) {
           <ChoicePill
             key={mo}
             active={mood === mo}
+            disabled={isFuture}
             onClick={() => setMood(mood === mo ? null : mo)}
           >
             {t(`log.mood.${mo}`)}
@@ -122,7 +202,12 @@ export function LogSheet({ open, date, onClose }: Props) {
       <SectionTitle>{t("log.symptoms")}</SectionTitle>
       <Grid>
         {SYMPTOMS.map((s) => (
-          <ChoicePill key={s} active={symptoms.has(s)} onClick={() => toggle(s)}>
+          <ChoicePill
+            key={s}
+            active={symptoms.has(s)}
+            disabled={isFuture}
+            onClick={() => toggle(s)}
+          >
             {t(`log.symptom.${s}`)}
           </ChoicePill>
         ))}
@@ -132,6 +217,7 @@ export function LogSheet({ open, date, onClose }: Props) {
       <textarea
         value={note}
         maxLength={500}
+        disabled={isFuture}
         onChange={(e) => setNote(e.target.value)}
         placeholder={t("log.note.placeholder")}
         className={[
@@ -139,8 +225,18 @@ export function LogSheet({ open, date, onClose }: Props) {
           "bg-[color:var(--surface-alt)] text-[color:var(--text)]",
           "border border-[color:var(--border)]",
           "focus:border-[color:var(--accent)] outline-none",
+          isFuture ? "opacity-50" : "",
         ].join(" ")}
       />
+
+      {error && (
+        <div
+          role="alert"
+          className="mt-3 rounded-[var(--radius)] bg-[color:var(--error-bg,#f8d7d5)] p-3 text-[13px] text-[color:var(--error,#8a1c1c)]"
+        >
+          {error}
+        </div>
+      )}
 
       <div className="mt-4 flex gap-2">
         <Button variant="ghost" size="lg" onClick={onClose}>
@@ -150,11 +246,40 @@ export function LogSheet({ open, date, onClose }: Props) {
           size="lg"
           fullWidth
           onClick={() => save.mutate()}
-          disabled={save.isPending}
+          disabled={save.isPending || isFuture}
         >
           {save.isPending ? t("action.saving") : t("log.save")}
         </Button>
       </div>
+
+      {(canDeleteEntry || canDeleteCycle) && !isFuture && (
+        <div className="mt-6 flex flex-col gap-2 border-t border-[color:var(--border)] pt-4">
+          {canDeleteEntry && (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => {
+                if (confirm(t("log.delete.entry.confirm"))) deleteEntry.mutate();
+              }}
+              disabled={deleteEntry.isPending}
+            >
+              {t("log.delete.entry")}
+            </Button>
+          )}
+          {canDeleteCycle && (
+            <Button
+              variant="danger"
+              size="md"
+              onClick={() => {
+                if (confirm(t("log.delete.cycle.confirm"))) deleteCycle.mutate();
+              }}
+              disabled={deleteCycle.isPending}
+            >
+              {t("log.delete.cycle")}
+            </Button>
+          )}
+        </div>
+      )}
     </Sheet>
   );
 }
@@ -173,17 +298,20 @@ function Grid({ children }: { children: React.ReactNode }) {
 
 function ChoicePill(props: {
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       onClick={props.onClick}
+      disabled={props.disabled}
       className={[
         "min-h-[44px] px-3 rounded-[var(--radius-sm)] text-[14px] transition-colors",
         props.active
           ? "bg-[color:var(--accent)] text-[color:var(--on-accent)]"
           : "bg-[color:var(--surface-alt)] text-[color:var(--text)]",
+        props.disabled ? "opacity-50 cursor-not-allowed" : "",
       ].join(" ")}
     >
       {props.children}
