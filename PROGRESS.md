@@ -5,7 +5,14 @@
 
 ## Текущий спринт
 
-**Спринт 6 — личный кабинет + деплой. Статус: готов.**
+**Спринт 6 — личный кабинет + деплой. Статус: закрыт.**
+
+**Пост-спринт — раскатка на VPS.**
+Deploy — done: HTTPS выдан, api/worker подняты, бэкапы Postgres —
+ежедневно, ретеншн 14 дней, шифрование AES-256 (проверено сквозное
+восстановление). Открыты: Telegram webhook (эндпоинт не реализован —
+недоделка спринтов 2/5, см. QUESTIONS.md), внешний uptime-мониторинг
+(отложено).
 
 ## Сделано
 
@@ -88,4 +95,25 @@ MVP готов технически. Дальнейшие действия — �
 
 ## Где остановились
 
-—
+VPS 5.129.212.158 (ams-1-vm-q0d1), Ubuntu 26.04, общий с zabiru:
+- HTTPS: LE-сертификат `/etc/letsencrypt/live/myfaza.ru/` (до
+  2026-10-25), автопродление через systemd + hook на reload nginx,
+  `certbot renew --dry-run` зелёный.
+- Nginx: `/etc/nginx/sites-enabled/myfaza.ru` (полный конфиг из
+  `deploy/nginx/myfaza.conf`), www→apex 301.
+- Контейнеры: `myfaza-api-1` healthy, `myfaza-worker-1` up, схема
+  из `deploy/docker-compose.small.yml` (host network). Postgres и
+  Redis — хостовые, 127.0.0.1:5432 / 6379.
+- Смоктест `/api/v1/health/ready` → `{"database":"ok","redis":"ok"}`.
+- Бэкапы: `/opt/myfaza-backups/dump.sh`, ежедневный systemd-таймер
+  `myfaza-backup.timer` в 03:00 UTC, шифр GPG AES-256, passphrase в
+  `/etc/myfaza/backup.passphrase` (chmod 600). Ретеншн 14 дней,
+  восстановление проверено (10 таблиц оригинала = 10 в восстановлении).
+
+**Что дальше по порядку:**
+1. Telegram webhook — не реализован эндпоинт (нужна спринт-доработка,
+   см. QUESTIONS.md пункт 4).
+2. Uptime-мониторинг — определиться с сервисом (QUESTIONS.md пункт 5).
+3. @BotFather команды (`setname`, `setdomain`, `setmenubutton`,
+   `setprivacy`) и `setWebhook` — красная зона, ждём п. 1.
+4. Миграция в РФ до публичного анонса (QUESTIONS.md пункт 2).
