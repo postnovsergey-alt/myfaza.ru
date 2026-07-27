@@ -7,12 +7,12 @@
 
 **Спринт 6 — личный кабинет + деплой. Статус: закрыт.**
 
-**Пост-спринт — раскатка на VPS.**
-Deploy — done: HTTPS выдан, api/worker подняты, бэкапы Postgres —
-ежедневно, ретеншн 14 дней, шифрование AES-256 (проверено сквозное
-восстановление). Открыты: Telegram webhook (эндпоинт не реализован —
-недоделка спринтов 2/5, см. QUESTIONS.md), внешний uptime-мониторинг
-(отложено).
+**Пост-спринт — раскатка на VPS + бот.**
+Deploy — done. Бот — done: закрыл дыру спринтов 2/5, реализовал
+webhook, aiogram Dispatcher, /start (с deep-link link_<token>),
+callback-кнопки cyc:start/end/notyet, тесты (11 новых, всего 116
+зелёных), setWebhook установлен, end-to-end проверен на проде.
+Открыт: внешний uptime-мониторинг (отложено).
 
 ## Сделано
 
@@ -110,10 +110,16 @@ VPS 5.129.212.158 (ams-1-vm-q0d1), Ubuntu 26.04, общий с zabiru:
   `/etc/myfaza/backup.passphrase` (chmod 600). Ретеншн 14 дней,
   восстановление проверено (10 таблиц оригинала = 10 в восстановлении).
 
+Дополнительно на сервере:
+- Bot: webhook `https://myfaza.ru/api/v1/telegram/webhook` установлен,
+  `getWebhookInfo` → ip 5.129.212.158, allowed_updates=[message,
+  callback_query].
+
 **Что дальше по порядку:**
-1. Telegram webhook — не реализован эндпоинт (нужна спринт-доработка,
-   см. QUESTIONS.md пункт 4).
-2. Uptime-мониторинг — определиться с сервисом (QUESTIONS.md пункт 5).
-3. @BotFather команды (`setname`, `setdomain`, `setmenubutton`,
-   `setprivacy`) и `setWebhook` — красная зона, ждём п. 1.
-4. Миграция в РФ до публичного анонса (QUESTIONS.md пункт 2).
+1. @BotFather настройки (`setname`, `setdomain=myfaza.ru`,
+   `setmenubutton=https://myfaza.ru/app`, `setprivacy=Enabled`) —
+   красная зона, делает заказчик.
+2. Ручной прогон живым пользователем на телефоне: `/start` в
+   `@moyafaza_bot`, открытие MiniApp, онбординг, отметка цикла.
+3. Uptime-мониторинг — определиться с сервисом (QUESTIONS.md #4).
+4. Миграция в РФ до публичного анонса (QUESTIONS.md #2).
