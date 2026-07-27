@@ -30,6 +30,7 @@ async def next_prediction(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": {"code": exc.code, "message": str(exc)}},
         ) from exc
+    is_active = await predictions_service.is_period_active(db, user.id)
     return PredictionOut(
         predicted_start=r.predicted_start,
         predicted_end=r.predicted_end,
@@ -42,6 +43,7 @@ async def next_prediction(
         days_until_period=r.days_until_period,
         is_overdue=r.is_overdue,
         overdue_days=r.overdue_days,
+        is_period_active=is_active,
     )
 
 

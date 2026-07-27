@@ -95,6 +95,8 @@ class PredictionOut(BaseModel):
     days_until_period: int
     is_overdue: bool
     overdue_days: int
+    # true, если сейчас идёт менструация (открытый цикл, начался <=14 дней назад)
+    is_period_active: bool = False
 
 
 class CalendarDay(BaseModel):

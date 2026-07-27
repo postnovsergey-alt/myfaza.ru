@@ -140,6 +140,7 @@ export interface PredictionOut {
   days_until_period: number;
   is_overdue: boolean;
   overdue_days: number;
+  is_period_active: boolean;
 }
 
 export interface CalendarDay {

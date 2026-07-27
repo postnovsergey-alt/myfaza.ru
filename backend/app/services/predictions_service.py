@@ -43,6 +43,29 @@ async def _last_cycle_start(db: AsyncSession, user_id: UUID) -> date | None:
     )
 
 
+# Разумный потолок «менструация всё ещё идёт»: обычно 2–10 дней.
+# Если цикл открытый, но начался больше двух недель назад — считаем, что
+# пользователь просто забыл отметить окончание, и UI-кнопку не показываем.
+_ACTIVE_PERIOD_MAX_DAYS = 14
+
+
+async def is_period_active(
+    db: AsyncSession, user_id: UUID, today: date | None = None
+) -> bool:
+    """True — если у пользователя есть открытый цикл (без end_date),
+    начавшийся не более 14 дней назад."""
+    today = today or _today()
+    open_cycle_start = await db.scalar(
+        select(Cycle.start_date)
+        .where(Cycle.user_id == user_id, Cycle.end_date.is_(None))
+        .order_by(Cycle.start_date.desc())
+    )
+    if open_cycle_start is None:
+        return False
+    days_since_start = (today - open_cycle_start).days
+    return 0 <= days_since_start <= _ACTIVE_PERIOD_MAX_DAYS
+
+
 async def predict_for_user(
     db: AsyncSession, user_id: UUID, today: date | None = None
 ) -> PredictionResult:

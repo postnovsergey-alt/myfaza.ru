@@ -27,6 +27,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [markOpen, setMarkOpen] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
 
   const prediction = useQuery({
     queryKey: ["prediction"],
@@ -41,14 +42,28 @@ export function HomePage() {
     staleTime: 30_000,
   });
 
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["prediction"] });
+    qc.invalidateQueries({ queryKey: ["calendar"] });
+  };
+
   const mark = useMutation({
     mutationFn: async (date: string) => {
       await api.post<Cycle>("/cycles", { start_date: date, source: "web" });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["prediction"] });
-      qc.invalidateQueries({ queryKey: ["calendar"] });
+      invalidate();
       setMarkOpen(false);
+    },
+  });
+
+  const markEnd = useMutation({
+    mutationFn: async (date: string) => {
+      await api.post<Cycle>("/cycles/current/end", { end_date: date });
+    },
+    onSuccess: () => {
+      invalidate();
+      setEndOpen(false);
     },
   });
 
@@ -98,9 +113,15 @@ export function HomePage() {
       </div>
 
       <div className="mt-auto flex flex-col gap-3">
-        <Button size="lg" fullWidth onClick={() => setMarkOpen(true)}>
-          {t("home.mark")}
-        </Button>
+        {p.is_period_active ? (
+          <Button size="lg" fullWidth onClick={() => setEndOpen(true)}>
+            {t("home.mark.end")}
+          </Button>
+        ) : (
+          <Button size="lg" fullWidth onClick={() => setMarkOpen(true)}>
+            {t("home.mark")}
+          </Button>
+        )}
       </div>
 
       <Sheet
@@ -133,6 +154,44 @@ export function HomePage() {
             fullWidth
             onClick={() => {
               setMarkOpen(false);
+              navigate("/calendar");
+            }}
+          >
+            {t("home.pick.date")}
+          </Button>
+        </div>
+      </Sheet>
+
+      <Sheet
+        open={endOpen}
+        onClose={() => setEndOpen(false)}
+        title={t("home.mark.end.title")}
+      >
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="secondary"
+            size="lg"
+            fullWidth
+            onClick={() => markEnd.mutate(todayISO(0))}
+            disabled={markEnd.isPending}
+          >
+            {t("home.today")} · {fmtDate(TODAY())}
+          </Button>
+          <Button
+            variant="secondary"
+            size="lg"
+            fullWidth
+            onClick={() => markEnd.mutate(todayISO(-1))}
+            disabled={markEnd.isPending}
+          >
+            {t("home.yesterday")} · {fmtDate(todayISO(-1))}
+          </Button>
+          <Button
+            variant="ghost"
+            size="lg"
+            fullWidth
+            onClick={() => {
+              setEndOpen(false);
               navigate("/calendar");
             }}
           >
