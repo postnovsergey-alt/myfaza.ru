@@ -2,11 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { t } from "@/i18n";
 import { useAuth } from "@/store/auth";
+
+interface LinkOut {
+  token: string;
+  link_url: string;
+  expires_at: string;
+}
 
 interface Me {
   id: string;
@@ -46,6 +52,10 @@ export function AccountPage() {
   });
 
   const [displayName, setDisplayName] = useState<string>("");
+  const [linkWebUrl, setLinkWebUrl] = useState<string | null>(null);
+  const [linkTgUrl, setLinkTgUrl] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const patchMe = useMutation({
     mutationFn: (body: Partial<Me>) => api.patch<Me>("/me", body),
@@ -81,6 +91,58 @@ export function AccountPage() {
       navigate("/login", { replace: true });
     },
   });
+
+  const linkWeb = useMutation({
+    mutationFn: () => api.post<LinkOut>("/auth/link/create", { direction: "tg_to_web" }),
+    onSuccess: (data) => {
+      setLinkTgUrl(null);
+      setLinkError(null);
+      setLinkCopied(false);
+      setLinkWebUrl(data.link_url);
+    },
+    onError: () => setLinkError(t("account.link.error")),
+  });
+
+  const linkTg = useMutation({
+    mutationFn: () => api.post<LinkOut>("/auth/link/create", { direction: "web_to_tg" }),
+    onSuccess: (data) => {
+      setLinkWebUrl(null);
+      setLinkError(null);
+      setLinkTgUrl(data.link_url);
+    },
+    onError: () => setLinkError(t("account.link.error")),
+  });
+
+  const unlinkTg = useMutation({
+    mutationFn: () => api.del("/me/telegram"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 409) {
+        alert(t("account.unlink.last"));
+      }
+    },
+  });
+
+  const unlinkEmail = useMutation({
+    mutationFn: () => api.del("/me/email"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+    onError: (e) => {
+      if (e instanceof ApiError && e.status === 409) {
+        alert(t("account.unlink.last"));
+      }
+    },
+  });
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // clipboard может быть недоступен (не https/insecure context) —
+      // хотя бы покажем URL текстом, чтобы пользователь скопировал руками
+    }
+  };
 
   const exportJson = () => {
     // Открываем экспорт в новой вкладке — сервер вернёт файл с attachment
@@ -125,28 +187,117 @@ export function AccountPage() {
       </Section>
 
       <Section title={t("account.login_methods")}>
-        <div className="rounded-[var(--radius)] bg-[color:var(--surface)] p-3 text-[14px]">
-          <div className="mb-2 flex items-center justify-between">
-            <span>Telegram</span>
-            <span className="text-[color:var(--text-soft)]">
-              {u.auth_methods.telegram.linked
-                ? "@" + (u.auth_methods.telegram.username ?? "linked")
-                : "—"}
-            </span>
+        <div className="flex flex-col gap-3 rounded-[var(--radius)] bg-[color:var(--surface)] p-3 text-[14px]">
+          {/* Telegram row */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div>Telegram</div>
+              <div className="text-[12px] text-[color:var(--text-soft)]">
+                {u.auth_methods.telegram.linked
+                  ? "@" + (u.auth_methods.telegram.username ?? t("account.telegram.linked"))
+                  : "—"}
+              </div>
+            </div>
+            {u.auth_methods.telegram.linked ? (
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => {
+                  if (confirm(t("account.unlink.confirm"))) unlinkTg.mutate();
+                }}
+                disabled={unlinkTg.isPending}
+              >
+                {t("account.telegram.unlink")}
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => linkTg.mutate()}
+                disabled={linkTg.isPending}
+              >
+                {t("account.telegram.link")}
+              </Button>
+            )}
           </div>
-          <div className="mb-2 flex items-center justify-between">
-            <span>Email</span>
-            <span className="text-[color:var(--text-soft)]">
-              {u.auth_methods.email.address ?? "—"}
-            </span>
+
+          {/* Email row */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div>Email</div>
+              <div className="truncate text-[12px] text-[color:var(--text-soft)]">
+                {u.auth_methods.email.address ?? "—"}
+              </div>
+            </div>
+            {u.auth_methods.email.linked ? (
+              <Button
+                variant="ghost"
+                size="md"
+                onClick={() => {
+                  if (confirm(t("account.unlink.confirm"))) unlinkEmail.mutate();
+                }}
+                disabled={unlinkEmail.isPending}
+              >
+                {t("account.email.unlink")}
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => linkWeb.mutate()}
+                disabled={linkWeb.isPending}
+              >
+                {t("account.web.link")}
+              </Button>
+            )}
           </div>
-          <div className="flex items-center justify-between">
+
+          {/* Пароль — только информация; смена пароля — отдельный экран,
+              пока не встроен. Если password_set=false и email привязан —
+              есть смысл добавить кнопку задать пароль. */}
+          <div className="flex items-center justify-between text-[12px] text-[color:var(--text-soft)]">
             <span>{t("account.password.change")}</span>
-            <span className="text-[color:var(--text-soft)]">
-              {u.auth_methods.password_set ? "✓" : "—"}
-            </span>
+            <span>{u.auth_methods.password_set ? "✓" : "—"}</span>
           </div>
         </div>
+
+        {/* Показ сгенерированной ссылки */}
+        {linkTgUrl && (
+          <div className="mt-3 flex flex-col gap-2 rounded-[var(--radius)] bg-[color:var(--surface-alt)] p-3">
+            <div className="text-[13px] text-[color:var(--text-soft)]">
+              {t("account.link.tg.help")}
+            </div>
+            <a
+              href={linkTgUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block rounded-[var(--radius-sm)] bg-[color:var(--accent)] px-4 py-2 text-center text-[14px] text-[color:var(--on-accent)]"
+            >
+              {t("account.link.tg.open")}
+            </a>
+          </div>
+        )}
+        {linkWebUrl && (
+          <div className="mt-3 flex flex-col gap-2 rounded-[var(--radius)] bg-[color:var(--surface-alt)] p-3">
+            <div className="text-[13px] text-[color:var(--text-soft)]">
+              {t("account.link.web.help")}
+            </div>
+            <div className="break-all rounded-[var(--radius-sm)] bg-[color:var(--surface)] p-2 text-[12px] text-[color:var(--text)]">
+              {linkWebUrl}
+            </div>
+            <Button variant="secondary" size="md" onClick={() => copyLink(linkWebUrl)}>
+              {linkCopied ? t("account.link.web.copied") : t("account.link.web.copy")}
+            </Button>
+          </div>
+        )}
+        {linkError && (
+          <div
+            role="alert"
+            className="mt-3 rounded-[var(--radius)] bg-[color:var(--error-bg,#f8d7d5)] p-3 text-[13px] text-[color:var(--error,#8a1c1c)]"
+          >
+            {linkError}
+          </div>
+        )}
       </Section>
 
       <Section title={t("account.sessions")}>

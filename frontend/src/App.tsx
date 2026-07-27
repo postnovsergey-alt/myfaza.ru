@@ -5,6 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import { AppShell } from "@/components/AppShell";
 import { AccountPage } from "@/features/account/AccountPage";
 import { ConsentGate } from "@/features/auth/ConsentGate";
+import { LinkPage } from "@/features/auth/LinkPage";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { TelegramGate } from "@/features/auth/TelegramGate";
 import { CalendarPage } from "@/features/calendar/CalendarPage";
@@ -134,6 +135,7 @@ export default function App() {
             }
           />
           <Route path="/privacy" element={<AppShell bare><PrivacyPage /></AppShell>} />
+          <Route path="/link" element={<AppShell bare><LinkPage /></AppShell>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
