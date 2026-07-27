@@ -66,7 +66,7 @@ async def send_notification(
                 notif.status = NotificationStatus.SKIPPED
                 notif.error = "no telegram id"
                 return SendResult(False, notif.error)
-            await _send_telegram(user.telegram_id, title, body, tg_send)
+            await _send_telegram(user.telegram_id, title, body, notif.type.value, tg_send)
         else:  # WEB
             subs = await _active_subs(db, notif.user_id)
             if not subs:
@@ -101,32 +101,39 @@ class _TelegramBlockedError(Exception):
     pass
 
 
-async def _send_telegram(chat_id: int, title: str, body: str, injected) -> None:
+def _keyboard_for(kind: str):
+    """Кнопки под сообщением — только для тех типов, где ждём ответ."""
+    from app.bot import keyboards
+
+    if kind == "period_start":
+        return keyboards.period_start_prompt()
+    if kind == "period_end":
+        return keyboards.period_end_prompt()
+    return None
+
+
+async def _send_telegram(chat_id: int, title: str, body: str, kind: str, injected) -> None:
     if injected is not None:
         return await injected(chat_id, title, body)
 
     # Ленивая инициализация — тесты не должны требовать boot-token
-    from aiogram import Bot
     from aiogram.exceptions import (
         TelegramForbiddenError,
         TelegramRetryAfter,
     )
 
-    token = get_settings().BOT_TOKEN
-    if not token:
-        raise RuntimeError("BOT_TOKEN пуст — Telegram-канал не сконфигурирован")
-    bot = Bot(token=token)
+    from app.bot.main import get_bot
+
+    bot = get_bot()
     try:
-        text = body  # title уходит в дискретный заголовок нативного пуша, но
-        # в чат его дублировать не нужно, брендинг очевиден.
-        await bot.send_message(chat_id=chat_id, text=text)
+        # title уходит в дискретный заголовок нативного пуша, в чат его
+        # дублировать не нужно — брендинг очевиден.
+        await bot.send_message(chat_id=chat_id, text=body, reply_markup=_keyboard_for(kind))
     except TelegramForbiddenError as exc:  # bot was blocked
         raise _TelegramBlockedError(str(exc)) from exc
     except TelegramRetryAfter as exc:
         # Уважаем retry_after — оставим статус pending, ретрай сделает воркер
         raise RuntimeError(f"rate limited, retry_after={exc.retry_after}") from exc
-    finally:
-        await bot.session.close()
 
 
 async def _active_subs(db: AsyncSession, user_id: UUID) -> list[PushSubscription]:

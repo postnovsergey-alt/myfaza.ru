@@ -8,6 +8,7 @@ os.environ.setdefault("APP_ENV", "local")
 # передаёт его как хвост строки, поэтому setdefault не срабатывает —
 # принудительно задаём валидный тестовый токен.
 os.environ["BOT_TOKEN"] = "123456:TESTBOTTOKENFORFAKEUSE"
+os.environ["WEBHOOK_SECRET"] = "test-webhook-secret-do-not-use-in-prod"
 # NullPool в тестах: pytest-asyncio использует новый loop на тест,
 # а asyncpg-соединения не переносятся между loop'ами.
 os.environ.setdefault("USE_NULL_POOL", "1")
