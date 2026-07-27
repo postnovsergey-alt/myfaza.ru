@@ -114,12 +114,15 @@ VPS 5.129.212.158 (ams-1-vm-q0d1), Ubuntu 26.04, общий с zabiru:
 - Bot: webhook `https://myfaza.ru/api/v1/telegram/webhook` установлен,
   `getWebhookInfo` → ip 5.129.212.158, allowed_updates=[message,
   callback_query].
+- Bot API-настройки (setMyName/Description/ShortDescription,
+  setChatMenuButton → web_app «Открыть» → /app, setMyCommands → /start).
+- @BotFather ручные: setuserpic (bot-icon-512.png, дискретная полудуга),
+  setprivacy=Enable, setdomain=myfaza.ru.
 
-**Что дальше по порядку:**
-1. @BotFather настройки (`setname`, `setdomain=myfaza.ru`,
-   `setmenubutton=https://myfaza.ru/app`, `setprivacy=Enabled`) —
-   красная зона, делает заказчик.
-2. Ручной прогон живым пользователем на телефоне: `/start` в
-   `@moyafaza_bot`, открытие MiniApp, онбординг, отметка цикла.
-3. Uptime-мониторинг — определиться с сервисом (QUESTIONS.md #4).
-4. Миграция в РФ до публичного анонса (QUESTIONS.md #2).
+**Что дальше:**
+1. Ручной прогон живым пользователем: `/start` в `@moyafaza_bot`,
+   открытие MiniApp, онбординг, отметка цикла, приём push. Собрать
+   баги, дать список фич.
+2. Багфиксы + новые фичи по итогам прогона.
+3. Uptime-мониторинг (QUESTIONS.md #4) — только после стабилизации.
+4. Миграция в РФ (QUESTIONS.md #2) — только перед публичным анонсом.
