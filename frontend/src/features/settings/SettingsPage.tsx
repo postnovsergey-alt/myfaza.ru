@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/Button";
+import { PinSection } from "@/features/pin/PinSection";
 import { IosInstallHint } from "@/features/push/IosInstallHint";
 import {
   detectCapability,
@@ -174,6 +175,8 @@ export function SettingsPage() {
           )}
         </div>
       </Section>
+
+      <PinSection />
 
       <Section title={t("settings.privacy")}>
         <div className="flex flex-col gap-2">

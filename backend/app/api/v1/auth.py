@@ -61,6 +61,7 @@ async def register(
             timezone_name=body.timezone,
             device_label=device,
             ip=ip,
+            remember=body.remember_me,
         )
     except auth_service.AuthError as exc:
         raise _error(exc) from exc
@@ -81,6 +82,7 @@ async def login(
             password=body.password,
             device_label=device,
             ip=ip,
+            remember=body.remember_me,
         )
     except auth_service.AuthError as exc:
         raise _error(exc) from exc

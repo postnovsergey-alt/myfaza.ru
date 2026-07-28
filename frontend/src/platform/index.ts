@@ -40,8 +40,13 @@ declare global {
 
 const tg = () => window.Telegram?.WebApp;
 
+// telegram-web-app.js подключён в index.html и создаёт window.Telegram.WebApp
+// даже в обычном браузере — с дефолтным colorScheme="light". Поэтому «мы в
+// Telegram» — это именно наличие initData, а не наличие объекта WebApp.
+const inTelegram = () => !!tg()?.initData;
+
 export function detectPlatform(): Platform {
-  return tg()?.initData ? "telegram" : "web";
+  return inTelegram() ? "telegram" : "web";
 }
 
 export function getInitData(): string | null {
@@ -56,8 +61,10 @@ export function getInitData(): string | null {
 export function getColorScheme(override?: "auto" | "light" | "dark"): ColorScheme {
   if (override === "light") return "light";
   if (override === "dark") return "dark";
-  const t = tg();
-  if (t?.colorScheme) return t.colorScheme;
+  if (inTelegram()) {
+    const scheme = tg()?.colorScheme;
+    if (scheme) return scheme;
+  }
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -73,11 +80,14 @@ export function haptic(kind: "tap" | "success" | "warning" = "tap") {
   else hf.notificationOccurred(kind);
 }
 
-/** Инициализация — вызывается один раз при старте */
-export function initPlatform(): { platform: Platform; scheme: ColorScheme } {
+/** Инициализация — вызывается один раз при старте.
+ *  Схему НЕ применяем здесь: это делает App через useEffect по [theme],
+ *  когда UI-стор уже поднял сохранённый override из localStorage. Иначе
+ *  успеваем моргнуть системной темой поверх выбранной пользователем. */
+export function initPlatform(): { platform: Platform } {
   const t = tg();
   const platform = detectPlatform();
-  if (t) {
+  if (t && inTelegram()) {
     t.ready();
     try {
       t.expand();
@@ -85,22 +95,25 @@ export function initPlatform(): { platform: Platform; scheme: ColorScheme } {
   }
   // Локаль на будущее — сейчас всегда ru
   setLocale("ru");
-  const scheme = getColorScheme();
-  applyColorScheme(scheme);
-  return { platform, scheme };
+  return { platform };
 }
 
-/** Слушаем смену темы в системе и в Telegram */
-export function subscribeThemeChanges(onChange: (s: ColorScheme) => void): () => void {
+/** Слушаем смену темы в системе и в Telegram.
+ *  Колбэк получает override пользователя, чтобы «auto» шёл за системой,
+ *  а явно выбранная тема НЕ перезатиралась при смене системной. */
+export function subscribeThemeChanges(
+  getOverride: () => "auto" | "light" | "dark",
+  onChange: (s: ColorScheme) => void,
+): () => void {
   const media = window.matchMedia("(prefers-color-scheme: dark)");
-  const mediaHandler = () => onChange(getColorScheme());
+  const mediaHandler = () => onChange(getColorScheme(getOverride()));
   media.addEventListener("change", mediaHandler);
   const t = tg();
-  const tgHandler = () => onChange(getColorScheme());
-  t?.onEvent("themeChanged", tgHandler);
+  const tgHandler = () => onChange(getColorScheme(getOverride()));
+  if (inTelegram()) t?.onEvent("themeChanged", tgHandler);
   return () => {
     media.removeEventListener("change", mediaHandler);
-    t?.offEvent("themeChanged", tgHandler);
+    if (inTelegram()) t?.offEvent("themeChanged", tgHandler);
   };
 }
 

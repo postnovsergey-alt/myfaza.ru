@@ -71,8 +71,10 @@ def _now() -> datetime:
     return datetime.now(tz=UTC)
 
 
-def _refresh_expiry() -> datetime:
-    return _now() + timedelta(days=get_settings().JWT_REFRESH_TTL_DAYS)
+def _refresh_expiry(remember: bool = False) -> datetime:
+    s = get_settings()
+    days = s.JWT_REFRESH_TTL_DAYS_REMEMBER if remember else s.JWT_REFRESH_TTL_DAYS
+    return _now() + timedelta(days=days)
 
 
 async def _ensure_settings(db: AsyncSession, user: User) -> None:
@@ -89,8 +91,13 @@ async def _issue_tokens(
     channel: Channel,
     device_label: str | None = None,
     ip: str | None = None,
+    remember: bool = False,
 ) -> TokenPair:
-    """Создать новую сессию и вернуть пару токенов."""
+    """Создать новую сессию и вернуть пару токенов.
+
+    remember=True — расширенный TTL (JWT_REFRESH_TTL_DAYS_REMEMBER),
+    для чекбокса «Оставаться в системе».
+    """
     access, ttl = security.create_access_token(str(user.id))
     refresh = security.generate_refresh_token()
     session = Session(
@@ -99,7 +106,7 @@ async def _issue_tokens(
         channel=channel,
         device_label=device_label,
         ip_hash=security.hash_ip(ip),
-        expires_at=_refresh_expiry(),
+        expires_at=_refresh_expiry(remember),
         last_used_at=_now(),
     )
     db.add(session)
@@ -117,6 +124,7 @@ async def register_email(
     timezone_name: str = "Europe/Moscow",
     device_label: str | None = None,
     ip: str | None = None,
+    remember: bool = False,
 ) -> tuple[User, TokenPair]:
     email_norm = email.strip().lower()
     existing = await db.scalar(select(User).where(User.email == email_norm))
@@ -131,7 +139,9 @@ async def register_email(
     db.add(user)
     await db.flush()
     await _ensure_settings(db, user)
-    tokens = await _issue_tokens(db, user, Channel.WEB, device_label=device_label, ip=ip)
+    tokens = await _issue_tokens(
+        db, user, Channel.WEB, device_label=device_label, ip=ip, remember=remember,
+    )
     return user, tokens
 
 
@@ -142,6 +152,7 @@ async def login_email(
     password: str,
     device_label: str | None = None,
     ip: str | None = None,
+    remember: bool = False,
 ) -> tuple[User, TokenPair]:
     email_norm = email.strip().lower()
     user = await db.scalar(select(User).where(User.email == email_norm))
@@ -149,7 +160,9 @@ async def login_email(
         raise InvalidCredentialsError("Неверный email или пароль")
     if not security.verify_password(password, user.password_hash):
         raise InvalidCredentialsError("Неверный email или пароль")
-    tokens = await _issue_tokens(db, user, Channel.WEB, device_label=device_label, ip=ip)
+    tokens = await _issue_tokens(
+        db, user, Channel.WEB, device_label=device_label, ip=ip, remember=remember,
+    )
     return user, tokens
 
 
@@ -175,7 +188,12 @@ async def authenticate_telegram(
         if username and user.telegram_username != username:
             user.telegram_username = username
     await _ensure_settings(db, user)
-    tokens = await _issue_tokens(db, user, Channel.TELEGRAM, device_label=device_label, ip=ip)
+    # Telegram Mini App живёт на устройстве пользователя вместе с самим
+    # мессенджером — держим сессию как «remember», чтобы не разлогинивать
+    # при редких заходах.
+    tokens = await _issue_tokens(
+        db, user, Channel.TELEGRAM, device_label=device_label, ip=ip, remember=True,
+    )
     return user, tokens, created
 
 

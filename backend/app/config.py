@@ -41,7 +41,12 @@ class Settings(BaseSettings):
 
     # --- JWT ---
     JWT_ACCESS_TTL_MINUTES: int = 30
-    JWT_REFRESH_TTL_DAYS: int = 60
+    # По умолчанию сессия живёт полгода без «Запомнить меня». Каждая
+    # ротация refresh сдвигает срок, так что при регулярных заходах
+    # разлогинивания не будет.
+    JWT_REFRESH_TTL_DAYS: int = 180
+    # С включённым чекбоксом «Оставаться в системе» — год.
+    JWT_REFRESH_TTL_DAYS_REMEMBER: int = 365
 
     # --- Мониторинг ---
     SENTRY_DSN: str = ""

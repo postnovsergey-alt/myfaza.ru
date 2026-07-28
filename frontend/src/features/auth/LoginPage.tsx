@@ -14,6 +14,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -30,7 +31,7 @@ export function LoginPage() {
     setBusy(true);
     try {
       const path = mode === "login" ? "/auth/login" : "/auth/register";
-      const body: Record<string, string> = { email, password };
+      const body: Record<string, unknown> = { email, password, remember_me: rememberMe };
       if (mode === "register") body.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const r = await api.post<TokenResponse>(path, body);
       setSession(r);
@@ -127,6 +128,16 @@ export function LoginPage() {
             <span className="text-[13px]">{t("consent.confirm")}</span>
           </label>
         )}
+
+        <label className="flex items-center gap-3 px-1 py-1 text-[13px] text-[color:var(--text-soft)]">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-5 w-5 accent-[color:var(--accent)]"
+          />
+          <span>{t("auth.remember_me")}</span>
+        </label>
 
         <Button type="submit" size="lg" fullWidth disabled={busy}>
           {t(mode === "login" ? "auth.login" : "auth.register")}
