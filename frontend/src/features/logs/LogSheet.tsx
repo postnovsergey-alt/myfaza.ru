@@ -81,6 +81,12 @@ export function LogSheet({ open, date, onClose }: Props) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  // Локальный черновик дат цикла — заполняется, когда клик пришёл на
+  // день из существующего цикла. Пустая строка в endDraft = «ещё идёт».
+  const [startDraft, setStartDraft] = useState("");
+  const [endDraft, setEndDraft] = useState("");
+  const [cycleError, setCycleError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) return;
     const row = existing.data;
@@ -90,6 +96,14 @@ export function LogSheet({ open, date, onClose }: Props) {
     setNote(row?.note ?? "");
     setError(null);
   }, [open, existing.data]);
+
+  useEffect(() => {
+    if (!open) return;
+    const cyc = cycleForDate.data;
+    setStartDraft(cyc?.start_date ?? "");
+    setEndDraft(cyc?.end_date ?? "");
+    setCycleError(null);
+  }, [open, cycleForDate.data]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["calendar"] });
@@ -139,6 +153,57 @@ export function LogSheet({ open, date, onClose }: Props) {
     },
     onError: () => setError(t("log.delete.error")),
   });
+
+  const patchCycle = useMutation({
+    mutationFn: async () => {
+      const cyc = cycleForDate.data;
+      if (!cyc) return;
+      const body: { start_date?: string; end_date: string | null } = {
+        end_date: endDraft || null,
+      };
+      if (startDraft && startDraft !== cyc.start_date) {
+        body.start_date = startDraft;
+      }
+      await api.patch<Cycle>(`/cycles/${cyc.id}`, body);
+    },
+    onSuccess: () => {
+      invalidate();
+      setCycleError(null);
+    },
+    onError: (e) => {
+      if (e instanceof ApiError) {
+        const code = e.code;
+        if (code === "CYCLE_OVERLAP") setCycleError(t("log.cycle.error.overlap"));
+        else if (code === "CYCLE_END_BEFORE_START")
+          setCycleError(t("log.cycle.error.end_before_start"));
+        else if (code === "CYCLE_FUTURE") setCycleError(t("log.cycle.error.future"));
+        else if (code === "CYCLE_TOO_OLD") setCycleError(t("log.cycle.error.too_old"));
+        else setCycleError(t("log.cycle.error.generic"));
+      } else {
+        setCycleError(t("log.cycle.error.generic"));
+      }
+    },
+  });
+
+  const validateAndSaveCycle = () => {
+    const cyc = cycleForDate.data;
+    if (!cyc) return;
+    if (!startDraft) {
+      setCycleError(t("log.cycle.error.start_required"));
+      return;
+    }
+    if (endDraft && endDraft < startDraft) {
+      setCycleError(t("log.cycle.error.end_before_start"));
+      return;
+    }
+    const today = todayISO();
+    if (startDraft > today || (endDraft && endDraft > today)) {
+      setCycleError(t("log.cycle.error.future"));
+      return;
+    }
+    setCycleError(null);
+    patchCycle.mutate();
+  };
 
   const toggle = (s: string) =>
     setSymptoms((old) => {
@@ -251,6 +316,73 @@ export function LogSheet({ open, date, onClose }: Props) {
           {save.isPending ? t("action.saving") : t("log.save")}
         </Button>
       </div>
+
+      {canDeleteCycle && !isFuture && (
+        <div className="mt-6 flex flex-col gap-3 border-t border-[color:var(--border)] pt-4">
+          <div className="text-[13px] text-[color:var(--text-soft)]">
+            {t("log.cycle.title")}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label className="flex flex-1 flex-col gap-1 text-[12px] text-[color:var(--text-soft)]">
+              <span>{t("log.cycle.start")}</span>
+              <input
+                type="date"
+                value={startDraft}
+                max={todayISO()}
+                onChange={(e) => setStartDraft(e.target.value)}
+                className="w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface-alt)] p-2 text-[14px] text-[color:var(--text)] focus:border-[color:var(--accent)] outline-none"
+              />
+            </label>
+            <label className="flex flex-1 flex-col gap-1 text-[12px] text-[color:var(--text-soft)]">
+              <span>{t("log.cycle.end")}</span>
+              <input
+                type="date"
+                value={endDraft}
+                min={startDraft || undefined}
+                max={todayISO()}
+                onChange={(e) => setEndDraft(e.target.value)}
+                className="w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface-alt)] p-2 text-[14px] text-[color:var(--text)] focus:border-[color:var(--accent)] outline-none"
+              />
+            </label>
+          </div>
+          {endDraft && (
+            <button
+              type="button"
+              onClick={() => setEndDraft("")}
+              className="self-start text-[12px] text-[color:var(--text-soft)] underline underline-offset-2"
+            >
+              {t("log.cycle.end.clear")}
+            </button>
+          )}
+          {cycleError && (
+            <div
+              role="alert"
+              className="rounded-[var(--radius-sm)] bg-[color:var(--error-bg,#f8d7d5)] p-2 text-[13px] text-[color:var(--error,#8a1c1c)]"
+            >
+              {cycleError}
+            </div>
+          )}
+          {(() => {
+            const cyc = cycleForDate.data;
+            const changed =
+              !!cyc &&
+              (startDraft !== cyc.start_date ||
+                (endDraft || null) !== (cyc.end_date ?? null));
+            return (
+              <Button
+                size="md"
+                variant="secondary"
+                onClick={validateAndSaveCycle}
+                disabled={patchCycle.isPending || !changed}
+              >
+                {patchCycle.isPending
+                  ? t("action.saving")
+                  : t("log.cycle.save")}
+              </Button>
+            );
+          })()}
+        </div>
+      )}
 
       {(canDeleteEntry || canDeleteCycle) && !isFuture && (
         <div className="mt-6 flex flex-col gap-2 border-t border-[color:var(--border)] pt-4">
