@@ -154,6 +154,29 @@ export function LogSheet({ open, date, onClose }: Props) {
     onError: () => setError(t("log.delete.error")),
   });
 
+  const [markError, setMarkError] = useState<string | null>(null);
+  const markStart = useMutation({
+    mutationFn: async () => {
+      if (!date) return;
+      await api.post<Cycle>("/cycles", { start_date: date, source: "web" });
+    },
+    onSuccess: () => {
+      invalidate();
+      onClose();
+    },
+    onError: (e) => {
+      if (e instanceof ApiError) {
+        const code = e.code;
+        if (code === "CYCLE_OVERLAP") setMarkError(t("log.cycle.error.overlap"));
+        else if (code === "CYCLE_FUTURE") setMarkError(t("log.cycle.error.future"));
+        else if (code === "CYCLE_TOO_OLD") setMarkError(t("log.cycle.error.too_old"));
+        else setMarkError(t("log.cycle.error.generic"));
+      } else {
+        setMarkError(t("log.cycle.error.generic"));
+      }
+    },
+  });
+
   const patchCycle = useMutation({
     mutationFn: async () => {
       const cyc = cycleForDate.data;
@@ -316,6 +339,33 @@ export function LogSheet({ open, date, onClose }: Props) {
           {save.isPending ? t("action.saving") : t("log.save")}
         </Button>
       </div>
+
+      {!canDeleteCycle && !isFuture && !cycleForDate.isLoading && (
+        <div className="mt-6 flex flex-col gap-2 border-t border-[color:var(--border)] pt-4">
+          <div className="text-[13px] text-[color:var(--text-soft)]">
+            {t("log.mark.title")}
+          </div>
+          {markError && (
+            <div
+              role="alert"
+              className="rounded-[var(--radius-sm)] bg-[color:var(--error-bg,#f8d7d5)] p-2 text-[13px] text-[color:var(--error,#8a1c1c)]"
+            >
+              {markError}
+            </div>
+          )}
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              setMarkError(null);
+              markStart.mutate();
+            }}
+            disabled={markStart.isPending}
+          >
+            {markStart.isPending ? t("action.saving") : t("log.mark.start")}
+          </Button>
+        </div>
+      )}
 
       {canDeleteCycle && !isFuture && (
         <div className="mt-6 flex flex-col gap-3 border-t border-[color:var(--border)] pt-4">
