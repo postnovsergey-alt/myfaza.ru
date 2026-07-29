@@ -4,9 +4,17 @@ import { useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field, Input } from "@/components/ui/Field";
 import { t } from "@/i18n";
 import { useAuth } from "@/store/auth";
+
+type ConfirmKind =
+  | "delete-account"
+  | "revoke-consent"
+  | "logout-all"
+  | "unlink-tg"
+  | "unlink-email";
 
 interface LinkOut {
   token: string;
@@ -56,6 +64,7 @@ export function AccountPage() {
   const [linkTgUrl, setLinkTgUrl] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [confirmKind, setConfirmKind] = useState<ConfirmKind | null>(null);
 
   const patchMe = useMutation({
     mutationFn: (body: Partial<Me>) => api.patch<Me>("/me", body),
@@ -202,9 +211,7 @@ export function AccountPage() {
               <Button
                 variant="ghost"
                 size="md"
-                onClick={() => {
-                  if (confirm(t("account.unlink.confirm"))) unlinkTg.mutate();
-                }}
+                onClick={() => setConfirmKind("unlink-tg")}
                 disabled={unlinkTg.isPending}
               >
                 {t("account.telegram.unlink")}
@@ -233,9 +240,7 @@ export function AccountPage() {
               <Button
                 variant="ghost"
                 size="md"
-                onClick={() => {
-                  if (confirm(t("account.unlink.confirm"))) unlinkEmail.mutate();
-                }}
+                onClick={() => setConfirmKind("unlink-email")}
                 disabled={unlinkEmail.isPending}
               >
                 {t("account.email.unlink")}
@@ -325,9 +330,7 @@ export function AccountPage() {
           <Button
             variant="danger"
             size="md"
-            onClick={() => {
-              if (confirm(t("confirm.logout.all"))) revokeAll.mutate();
-            }}
+            onClick={() => setConfirmKind("logout-all")}
           >
             {t("account.sessions.end.all")}
           </Button>
@@ -345,23 +348,74 @@ export function AccountPage() {
           <Button
             variant="danger"
             size="md"
-            onClick={() => {
-              if (confirm(t("confirm.revoke.consent"))) revokeConsent.mutate();
-            }}
+            onClick={() => setConfirmKind("revoke-consent")}
           >
             {t("settings.consent.revoke")}
           </Button>
           <Button
             variant="danger"
             size="md"
-            onClick={() => {
-              if (confirm(t("confirm.delete.account"))) deleteAccount.mutate();
-            }}
+            onClick={() => setConfirmKind("delete-account")}
           >
             {t("settings.delete")}
           </Button>
         </div>
       </Section>
+
+      <ConfirmDialog
+        open={confirmKind === "delete-account"}
+        title={t("confirm.delete.account.title")}
+        description={t("confirm.delete.account.desc")}
+        confirmLabel={t("confirm.delete.account.yes")}
+        danger
+        busy={deleteAccount.isPending}
+        onConfirm={() => deleteAccount.mutate()}
+        onClose={() => setConfirmKind(null)}
+      />
+      <ConfirmDialog
+        open={confirmKind === "revoke-consent"}
+        title={t("confirm.revoke.consent.title")}
+        description={t("confirm.revoke.consent.desc")}
+        confirmLabel={t("confirm.revoke.consent.yes")}
+        danger
+        busy={revokeConsent.isPending}
+        onConfirm={() => revokeConsent.mutate()}
+        onClose={() => setConfirmKind(null)}
+      />
+      <ConfirmDialog
+        open={confirmKind === "logout-all"}
+        title={t("confirm.logout.all.title")}
+        description={t("confirm.logout.all.desc")}
+        confirmLabel={t("confirm.logout.all.yes")}
+        danger
+        busy={revokeAll.isPending}
+        onConfirm={() => revokeAll.mutate()}
+        onClose={() => setConfirmKind(null)}
+      />
+      <ConfirmDialog
+        open={confirmKind === "unlink-tg"}
+        title={t("account.unlink.title")}
+        description={t("account.unlink.desc")}
+        confirmLabel={t("account.unlink.yes")}
+        busy={unlinkTg.isPending}
+        onConfirm={() => {
+          unlinkTg.mutate();
+          setConfirmKind(null);
+        }}
+        onClose={() => setConfirmKind(null)}
+      />
+      <ConfirmDialog
+        open={confirmKind === "unlink-email"}
+        title={t("account.unlink.title")}
+        description={t("account.unlink.desc")}
+        confirmLabel={t("account.unlink.yes")}
+        busy={unlinkEmail.isPending}
+        onConfirm={() => {
+          unlinkEmail.mutate();
+          setConfirmKind(null);
+        }}
+        onClose={() => setConfirmKind(null)}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { api, ApiError, type Cycle, type DailyLogRow } from "@/api/client";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Sheet } from "@/components/ui/Sheet";
 import { t } from "@/i18n";
 
@@ -80,6 +81,9 @@ export function LogSheet({ open, date, onClose }: Props) {
   const [symptoms, setSymptoms] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<"entry" | "cycle" | null>(
+    null,
+  );
 
   // Локальный черновик дат цикла — заполняется, когда клик пришёл на
   // день из существующего цикла. Пустая строка в endDraft = «ещё идёт».
@@ -192,6 +196,8 @@ export function LogSheet({ open, date, onClose }: Props) {
     onSuccess: () => {
       invalidate();
       setCycleError(null);
+      setCycleSaved(true);
+      setTimeout(() => setCycleSaved(false), 1600);
     },
     onError: (e) => {
       if (e instanceof ApiError) {
@@ -237,6 +243,7 @@ export function LogSheet({ open, date, onClose }: Props) {
 
   const canDeleteEntry = !!existing.data;
   const canDeleteCycle = !!cycleForDate.data;
+  const [cycleSaved, setCycleSaved] = useState(false);
 
   return (
     <Sheet open={open} onClose={onClose} title={t("log.title")}>
@@ -256,6 +263,69 @@ export function LogSheet({ open, date, onClose }: Props) {
           className="mb-3 rounded-[var(--radius)] bg-[color:var(--surface-alt)] p-3 text-[13px] text-[color:var(--text-soft)]"
         >
           {t("log.future.banner")}
+        </div>
+      )}
+
+      {canDeleteCycle && !isFuture && (
+        <div className="mb-4 flex flex-col gap-3 rounded-[var(--radius)] bg-[color:var(--surface-alt)] p-3">
+          <div className="text-[13px] font-medium text-[color:var(--text)]">
+            {t("log.cycle.title")}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label className="flex flex-1 flex-col gap-1 text-[12px] text-[color:var(--text-soft)]">
+              <span>{t("log.cycle.start")}</span>
+              <input
+                type="date"
+                value={startDraft}
+                max={todayISO()}
+                onChange={(e) => setStartDraft(e.target.value)}
+                className="w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-[14px] text-[color:var(--text)] focus:border-[color:var(--accent)] outline-none"
+              />
+            </label>
+            <label className="flex flex-1 flex-col gap-1 text-[12px] text-[color:var(--text-soft)]">
+              <span>{t("log.cycle.end")}</span>
+              <input
+                type="date"
+                value={endDraft}
+                min={startDraft || undefined}
+                max={todayISO()}
+                onChange={(e) => setEndDraft(e.target.value)}
+                className="w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface)] p-2 text-[14px] text-[color:var(--text)] focus:border-[color:var(--accent)] outline-none"
+              />
+            </label>
+          </div>
+          {endDraft && (
+            <button
+              type="button"
+              onClick={() => setEndDraft("")}
+              className="self-start text-[12px] text-[color:var(--text-soft)] underline underline-offset-2"
+            >
+              {t("log.cycle.end.clear")}
+            </button>
+          )}
+          {cycleError && (
+            <div
+              role="alert"
+              className="rounded-[var(--radius-sm)] bg-[color:var(--error-bg,#f8d7d5)] p-2 text-[13px] text-[color:var(--error,#8a1c1c)]"
+            >
+              {cycleError}
+            </div>
+          )}
+          {cycleSaved && (
+            <div className="rounded-[var(--radius-sm)] bg-[color:var(--surface)] p-2 text-[12px] text-[color:var(--text-soft)]">
+              {t("action.saved")}
+            </div>
+          )}
+          <Button
+            size="md"
+            variant="primary"
+            onClick={validateAndSaveCycle}
+            disabled={patchCycle.isPending}
+          >
+            {patchCycle.isPending
+              ? t("action.saving")
+              : t("log.cycle.save")}
+          </Button>
         </div>
       )}
 
@@ -367,82 +437,13 @@ export function LogSheet({ open, date, onClose }: Props) {
         </div>
       )}
 
-      {canDeleteCycle && !isFuture && (
-        <div className="mt-6 flex flex-col gap-3 border-t border-[color:var(--border)] pt-4">
-          <div className="text-[13px] text-[color:var(--text-soft)]">
-            {t("log.cycle.title")}
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <label className="flex flex-1 flex-col gap-1 text-[12px] text-[color:var(--text-soft)]">
-              <span>{t("log.cycle.start")}</span>
-              <input
-                type="date"
-                value={startDraft}
-                max={todayISO()}
-                onChange={(e) => setStartDraft(e.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface-alt)] p-2 text-[14px] text-[color:var(--text)] focus:border-[color:var(--accent)] outline-none"
-              />
-            </label>
-            <label className="flex flex-1 flex-col gap-1 text-[12px] text-[color:var(--text-soft)]">
-              <span>{t("log.cycle.end")}</span>
-              <input
-                type="date"
-                value={endDraft}
-                min={startDraft || undefined}
-                max={todayISO()}
-                onChange={(e) => setEndDraft(e.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[color:var(--border)] bg-[color:var(--surface-alt)] p-2 text-[14px] text-[color:var(--text)] focus:border-[color:var(--accent)] outline-none"
-              />
-            </label>
-          </div>
-          {endDraft && (
-            <button
-              type="button"
-              onClick={() => setEndDraft("")}
-              className="self-start text-[12px] text-[color:var(--text-soft)] underline underline-offset-2"
-            >
-              {t("log.cycle.end.clear")}
-            </button>
-          )}
-          {cycleError && (
-            <div
-              role="alert"
-              className="rounded-[var(--radius-sm)] bg-[color:var(--error-bg,#f8d7d5)] p-2 text-[13px] text-[color:var(--error,#8a1c1c)]"
-            >
-              {cycleError}
-            </div>
-          )}
-          {(() => {
-            const cyc = cycleForDate.data;
-            const changed =
-              !!cyc &&
-              (startDraft !== cyc.start_date ||
-                (endDraft || null) !== (cyc.end_date ?? null));
-            return (
-              <Button
-                size="md"
-                variant="secondary"
-                onClick={validateAndSaveCycle}
-                disabled={patchCycle.isPending || !changed}
-              >
-                {patchCycle.isPending
-                  ? t("action.saving")
-                  : t("log.cycle.save")}
-              </Button>
-            );
-          })()}
-        </div>
-      )}
-
       {(canDeleteEntry || canDeleteCycle) && !isFuture && (
         <div className="mt-6 flex flex-col gap-2 border-t border-[color:var(--border)] pt-4">
           {canDeleteEntry && (
             <Button
               variant="ghost"
               size="md"
-              onClick={() => {
-                if (confirm(t("log.delete.entry.confirm"))) deleteEntry.mutate();
-              }}
+              onClick={() => setConfirmDelete("entry")}
               disabled={deleteEntry.isPending}
             >
               {t("log.delete.entry")}
@@ -452,9 +453,7 @@ export function LogSheet({ open, date, onClose }: Props) {
             <Button
               variant="danger"
               size="md"
-              onClick={() => {
-                if (confirm(t("log.delete.cycle.confirm"))) deleteCycle.mutate();
-              }}
+              onClick={() => setConfirmDelete("cycle")}
               disabled={deleteCycle.isPending}
             >
               {t("log.delete.cycle")}
@@ -462,6 +461,33 @@ export function LogSheet({ open, date, onClose }: Props) {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete === "entry"}
+        title={t("log.delete.entry")}
+        description={t("log.delete.entry.confirm")}
+        confirmLabel={t("action.delete")}
+        danger
+        busy={deleteEntry.isPending}
+        onConfirm={() => {
+          setConfirmDelete(null);
+          deleteEntry.mutate();
+        }}
+        onClose={() => setConfirmDelete(null)}
+      />
+      <ConfirmDialog
+        open={confirmDelete === "cycle"}
+        title={t("log.delete.cycle")}
+        description={t("log.delete.cycle.confirm")}
+        confirmLabel={t("action.delete")}
+        danger
+        busy={deleteCycle.isPending}
+        onConfirm={() => {
+          setConfirmDelete(null);
+          deleteCycle.mutate();
+        }}
+        onClose={() => setConfirmDelete(null)}
+      />
     </Sheet>
   );
 }
