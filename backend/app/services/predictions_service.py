@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import calendar
 from datetime import UTC, date, datetime
+from statistics import median
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Cycle, DailyLog
+from app.db.models import Cycle, DailyLog, UserSettings
 from app.services import cycles_service
 from app.services.prediction import PredictionInputs, PredictionResult, compute
 
@@ -41,6 +42,43 @@ async def _last_cycle_start(db: AsyncSession, user_id: UUID) -> date | None:
         .where(Cycle.user_id == user_id)
         .order_by(Cycle.start_date.desc())
     )
+
+
+async def _fetch_recent_period_lengths(
+    db: AsyncSession, user_id: UUID, limit: int = 6
+) -> list[int]:
+    """period_length у последних закрытых циклов (end_date != NULL),
+    в порядке от свежих к старым."""
+    result = await db.scalars(
+        select(Cycle.period_length)
+        .where(Cycle.user_id == user_id, Cycle.period_length.is_not(None))
+        .order_by(Cycle.start_date.desc())
+        .limit(limit)
+    )
+    return [int(v) for v in result.all() if v is not None]
+
+
+# Ниже 3 наблюдений одного цикла недостаточно — один экстремальный
+# кейс (грипп, стресс) может исказить медиану.
+_MIN_OBSERVATIONS_FOR_EFFECTIVE = 3
+
+
+async def effective_period_length(
+    db: AsyncSession, user_id: UUID, settings: UserSettings
+) -> int:
+    """Индивидуальная длительность менструации: медиана по последним 6
+    завершённым циклам. Если наблюдений меньше 3 — возвращаем значение
+    из настроек (то, что пользователь указал в онбординге).
+
+    Причина: константа из онбординга — это грубая оценка «в среднем 5»,
+    а после нескольких залогированных циклов у нас есть индивидуальный
+    факт, который точнее любого дефолта. Влияет на predicted_end и на
+    расчёт expected_end в уведомлении period_end.
+    """
+    observed = await _fetch_recent_period_lengths(db, user_id, limit=6)
+    if len(observed) >= _MIN_OBSERVATIONS_FOR_EFFECTIVE:
+        return int(round(median(observed)))
+    return settings.avg_period_length
 
 
 # Разумный потолок «менструация всё ещё идёт»: обычно 2–10 дней.
@@ -75,12 +113,13 @@ async def predict_for_user(
 
     settings = await cycles_service.get_settings(db, user_id)
     lengths = await _fetch_recent_completed_lengths(db, user_id)
+    period_len = await effective_period_length(db, user_id, settings)
 
     inputs = PredictionInputs(
         completed_cycle_lengths=lengths,
         last_cycle_start=last_start,
         avg_cycle_length=settings.avg_cycle_length,
-        avg_period_length=settings.avg_period_length,
+        avg_period_length=period_len,
         luteal_phase_length=settings.luteal_phase_length,
         today=today or _today(),
     )

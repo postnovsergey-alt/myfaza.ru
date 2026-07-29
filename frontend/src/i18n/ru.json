@@ -34,6 +34,8 @@
   "home.days": "{n, plural, one {# день} few {# дня} other {# дней}}",
   "home.overdue": "Задержка {n, plural, one {# день} few {# дня} other {# дней}}",
   "home.expected": "Ожидается {date}",
+  "home.expected.around": "Ожидается около {date}",
+  "home.expected.range": "Ожидается {range}",
   "home.mark": "Отметить начало",
   "home.mark.end": "Отметить окончание",
   "home.mark.end.title": "Менструация закончилась?",

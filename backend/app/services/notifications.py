@@ -105,7 +105,10 @@ async def _compute_kinds_for_today(
     if settings.notify_period_end:
         open_cycle = await _current_open_cycle(db, user.id)
         if open_cycle is not None:
-            expected_end = open_cycle.start_date + timedelta(days=settings.avg_period_length - 1)
+            period_len = await predictions_service.effective_period_length(
+                db, user.id, settings
+            )
+            expected_end = open_cycle.start_date + timedelta(days=period_len - 1)
             if today == expected_end + timedelta(days=1):
                 kinds.append("period_end")
 

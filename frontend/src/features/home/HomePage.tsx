@@ -15,6 +15,44 @@ function fmtDate(iso: string): string {
   }).format(new Date(iso + "T00:00:00Z"));
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function shiftISO(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  return new Date(d.getTime() + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Форматирует диапазон [startISO..endISO] так, чтобы название месяца
+ * не повторялось внутри одного месяца: «12–16 августа» vs
+ * «30 июля – 3 августа».
+ */
+function fmtRange(startISO: string, endISO: string): string {
+  const start = new Date(startISO + "T00:00:00Z");
+  const end = new Date(endISO + "T00:00:00Z");
+  const sameMonth =
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCFullYear() === end.getUTCFullYear();
+  if (sameMonth) {
+    const dayFmt = new Intl.DateTimeFormat("ru", { day: "numeric" });
+    return `${dayFmt.format(start)}–${fmtDate(endISO)}`;
+  }
+  return `${fmtDate(startISO)} – ${fmtDate(endISO)}`;
+}
+
+/**
+ * Прогноз старта показываем не точкой, а диапазоном. margin — это
+ * σ из алгоритма (raздел 7 ТЗ): чем ниже уверенность модели, тем
+ * шире окно. Точка обманывает пользователя ложной точностью.
+ */
+function formatPredictedStart(startISO: string, margin: number): string {
+  if (margin <= 0) return t("home.expected", { date: fmtDate(startISO) });
+  if (margin === 1) return t("home.expected.around", { date: fmtDate(startISO) });
+  const from = shiftISO(startISO, -margin);
+  const to = shiftISO(startISO, margin);
+  return t("home.expected.range", { range: fmtRange(from, to) });
+}
+
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
 function todayISO(offsetDays = 0): string {
@@ -161,8 +199,7 @@ export function HomePage() {
 
       <div className="rounded-[var(--radius)] bg-[color:var(--surface)] p-4">
         <div className="text-[13px] text-[color:var(--text-soft)]">
-          {t("home.expected", { date: fmtDate(p.predicted_start) })}
-          {p.margin_days > 0 ? ` ± ${p.margin_days}` : ""}
+          {formatPredictedStart(p.predicted_start, p.margin_days)}
         </div>
       </div>
 
